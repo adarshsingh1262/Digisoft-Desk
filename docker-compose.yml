@@ -1,0 +1,86 @@
+name: digisoft-helpdesk
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # Disable with: docker compose --profile "" up  (and point DATABASE_URL elsewhere)
+    profiles: ['local-db']
+    environment:
+      POSTGRES_USER: digisoft
+      POSTGRES_PASSWORD: digisoft
+      POSTGRES_DB: digisoft_helpdesk
+    ports: ['5432:5432']
+    volumes: ['postgres-data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U digisoft -d digisoft_helpdesk']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+    volumes: ['redis-data:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: digisoft
+      MINIO_ROOT_PASSWORD: digisoft123
+    ports: ['9000:9000', '9001:9001']
+    volumes: ['minio-data:/data']
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports: ['1025:1025', '8025:8025']
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public}
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      EMAIL_PROVIDER: smtp
+    ports: ['4000:4000']
+    depends_on:
+      redis: { condition: service_healthy }
+    command: sh -c "cd /app && pnpm --filter @digisoft/db migrate:deploy && cd apps/api && node dist/main.js"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public}
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      EMAIL_PROVIDER: smtp
+    depends_on:
+      redis: { condition: service_healthy }
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+    ports: ['3000:3000']
+    depends_on: [api]
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
