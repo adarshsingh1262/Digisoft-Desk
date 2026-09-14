@@ -77,7 +77,8 @@ single-node self-hosting. Anything running more than one API instance needs `s3`
 
 | Variable | Default | Notes |
 |---|---|---|
-| `WORKER_CONCURRENCY` | `5` | Jobs processed in parallel per queue |
+| `WORKER_CONCURRENCY` | `5` | Jobs processed in parallel per queue (the SLA sweep always runs one at a time) |
+| `SLA_SCAN_INTERVAL_SECONDS` | `60` | How often the worker sweeps for SLA warnings and breaches; this is the detection resolution |
 
 ## Frontend
 

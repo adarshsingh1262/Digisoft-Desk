@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Architecture
 
-> Status: **Phases 1–2 implemented.** Sections describing later phases are marked as planned.
+> Status: **Phases 1–3 implemented.** Sections describing later phases are marked as planned.
 
 ## 1. Final architecture
 
@@ -66,12 +66,15 @@ Digisoft-Desk/
 │   │   │   ├── tickets/          # queue, lifecycle, conversation, visibility, events
 │   │   │   ├── ticket-config/    # statuses, priorities, categories, tags
 │   │   │   ├── attachments/      # upload, authorised download, deletion
-│   │   │   └── (sla, automation, knowledge-base, … arrive in later phases)
+│   │   │   ├── activities/       # tasks, calls, events
+│   │   │   ├── operations/       # assignment rules, automation/escalations, SLA policies, blueprints
+│   │   │   ├── engine/           # the API's handle on @digisoft/engine + trigger queue
+│   │   │   └── (knowledge-base, help-center, channels, … arrive in later phases)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
 │   ├── worker/                   # BullMQ consumers; no HTTP surface
-│   │   ├── src/processors/       # send-email, deliver-notification
+│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla
 │   │   └── Dockerfile
 │   │
 │   └── web/                      # Next.js App Router
@@ -82,6 +85,7 @@ Digisoft-Desk/
 │       └── Dockerfile
 │
 ├── packages/
+│   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
 │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
 │   ├── shared/                   # Zod schemas + types shared by frontend and backend
 │   └── tsconfig/                 # strict TypeScript bases
@@ -146,6 +150,30 @@ Customers (contacts) authenticate into the same org but with role `CUSTOMER`; th
 - `docker-compose.prod.yml` uses multi-stage builds (distroless runtime), no bind mounts, external managed Postgres/Redis/S3, and Nginx in front.
 - The local `postgres` service sits behind the `local-db` compose profile: supply a
   managed `DATABASE_URL` and run `docker compose up` without the profile to skip it.
+
+## 5b. The operations engine
+
+`packages/engine` is pure logic with a small dependency contract (`prisma`, `redis`,
+`emailQueue`, `log`). Both hosts satisfy it with an **unscoped** Prisma client, so every
+engine query names `organizationId` explicitly — the worker has no request, hence no
+tenant context to lean on.
+
+| Piece | Runs in | Why there |
+|---|---|---|
+| Assignment rules (`decideAssignment`) | API, synchronously on create | The response should already show who got the ticket |
+| SLA apply / pause / resume | API, synchronously | Due dates belong on the created ticket, and the clock must stop the moment a pausing status is chosen |
+| Blueprint checks (`checkTransition`) | API, synchronously | A refused move needs an immediate, specific error |
+| Automation and escalation rules (`runTrigger`) | Worker, `automation` queue | A slow rule or a flaky email must never delay a request |
+| SLA sweep (`scanSla`) | Worker, repeatable `sla` job | Warnings and breaches fire whether or not anyone is using the app |
+
+The sweep is idempotent: each target is stamped (`*WarnedAt`, `*BreachedAt`) the first
+time it fires, so a retried job or a second worker cannot fire it twice. Triggers are
+enqueued with a per-second job id, so a burst of edits to one ticket collapses into one
+evaluation rather than storming the rules.
+
+Business-hours arithmetic uses `Intl` alone: working windows live in the calendar's
+timezone and are converted per day, so DST shifts and holidays are honoured without a
+date library.
 
 ## 5a. File storage
 

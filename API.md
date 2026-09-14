@@ -115,16 +115,51 @@ description or a ticket number.
 
 **Not yet built:** `POST /tickets/bulk`.
 
-## Activities, automation, SLA, blueprints — P3
+## Activities — P3 (implemented)
 ```
-GET|POST /activities                   # ?type=TASK|CALL|EVENT
-GET|PATCH|DELETE /activities/:id
-GET|POST /automation-rules  · /:id · POST /:id/enable|/disable · GET /:id/runs
-GET|POST /assignment-rules  · /:id · PATCH /reorder
-GET|POST /sla-policies · /:id · GET /tickets/:id/sla
-GET|POST /escalation-rules · /:id
-GET|POST /blueprints · /:id · GET /tickets/:id/transitions
+GET    /activities                    # ?type&status&ticketId&contactId&accountId&assignedToId&assignedToMe&overdue&q
+GET    /activities/:id
+POST   /activities                    # { type: TASK|CALL|EVENT, subject, ... }
+PATCH  /activities/:id                # includes { status: OPEN|COMPLETED|CANCELLED }
+DELETE /activities/:id                # soft delete
 ```
+A call logged with a duration is stored as already completed. An event needs `startAt`.
+
+## Support operations — P3 (implemented)
+```
+GET|POST         /assignment-rules   · PATCH|DELETE /assignment-rules/:id
+PATCH            /assignment-rules/reorder            # { ids } — full evaluation order
+
+GET              /automation-rules?escalations=true|false
+GET              /automation-rules/runs               # ?ruleId&ticketId&matched — every evaluation
+GET|POST         /automation-rules   · PATCH|DELETE /automation-rules/:id
+POST             /automation-rules/:id/enable | /disable
+
+GET|POST         /sla-policies       · PATCH|DELETE /sla-policies/:id   (PATCH takes the full policy)
+GET|POST         /blueprints         · PATCH|DELETE /blueprints/:id     (PATCH takes the full blueprint)
+
+GET    /tickets/:id/transitions        # { governed, blueprint?, transitions[] } for the caller's roles
+```
+
+**Escalations are automation rules** whose trigger is `SLA_WARNING` or `SLA_BREACHED`;
+there is no separate escalation resource. `?escalations=true` lists just those.
+
+**Rule DSL** (shared by assignment rules, automation rules, SLA policies and blueprints):
+conditions are `{ all: Leaf[], any: Leaf[] }` with `Leaf = { field, op, value? }` over
+`statusId · priorityId · departmentId · categoryId · assignedAgentId · contactId ·
+accountId · source · tagIds · subject · description · contactIsVip · isAssigned ·
+priorityWeight` and operators `eq neq in not_in contains not_contains is_empty
+is_not_empty gt gte lt lte`. Actions: `assign_agent · assign_department · unassign ·
+set_priority · set_status · add_tag · remove_tag · apply_sla · notify_users ·
+notify_assignee · notify_department · send_email · add_internal_note · create_task`.
+Messages accept `{{ticket.number}} {{ticket.subject}} {{ticket.status}}
+{{ticket.priority}} {{contact.name}} {{assignee.name}} {{organization.name}}`.
+
+**Ticket SLA fields** (on every ticket payload): `slaPolicy`, `firstResponseDueAt`,
+`resolutionDueAt`, `firstResponseBreachedAt`, `resolutionBreachedAt`, `slaPausedAt`;
+`dueAt` mirrors `resolutionDueAt`.
+
+**Query booleans** are parsed strictly: `true|false|1|0`. Anything else is a 400.
 
 ## Self-service — P4
 ```
@@ -205,8 +240,9 @@ Namespace `/rt`, authenticated on handshake with the access token. A socket join
 boundary. Ticket and department rooms arrive with Phase 2.
 
 Implemented today: `ticket.created`, `ticket.updated`, `ticket.assigned`,
-`ticket.status_changed`, `message.created`, `notification.created`, `agent.online`,
-`agent.offline`.
+`ticket.status_changed`, `message.created`, `sla.warning`, `sla.breached`,
+`notification.created`, `agent.online`, `agent.offline`. Worker-originated ticket
+events carry an `audience` and are routed to the same rooms as API-originated ones.
 
 Ticket events are addressed to three rooms — the organization's full-queue room (joined
 only by sockets whose user holds `ticket.read.all`), the ticket's department room, and

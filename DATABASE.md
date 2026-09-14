@@ -1,7 +1,7 @@
 # Digisoft360 Help Desk — Data Model
 
-> Status: **Phase 1 and Phase 2 tables are implemented and migrated.** Later-phase
-> tables are planned shapes, not yet created.
+> Status: **Phases 1–3 are implemented and migrated.** Later-phase tables are planned
+> shapes, not yet created.
 
 Schema, migrations and seed live in `packages/db`. The initial migration is
 `packages/db/prisma/migrations/*_init`.
@@ -253,7 +253,20 @@ model AuditLog {
   - There is no separate `TicketHistory` table: `GET /tickets/:id/history` reads
     `AuditLog` filtered to the ticket. One append-only trail is easier to keep correct
     than two, and it already carries actor, action, old and new values.
-- **Phase 3** — `Activity`, `AutomationRule`, `AutomationRun`, `AssignmentRule`, `SlaPolicy`, `SlaTarget`, `SlaTimer` (`firstResponseDueAt`, `resolutionDueAt`, `pausedAt`, `pausedMs`, `breachedAt`), `EscalationRule`, `Blueprint`, `BlueprintTransition`.
+- **Phase 3 (built)** — `Activity`, `AssignmentRule`, `AutomationRule`, `AutomationRun`,
+  `SlaPolicy`, `SlaTarget`, `Blueprint`, `BlueprintTransition`. Three decisions differ
+  from the sketch:
+  - **No `SlaTimer` table.** The clock lives on `Ticket` (`slaPolicyId`,
+    `firstResponseDueAt`, `resolutionDueAt`, `*WarnedAt`, `*BreachedAt`, `slaPausedAt`,
+    `firstResponseRemainingMin`, `resolutionRemainingMin`), indexed on the two due
+    columns. Pausing stores the *remaining business minutes*; resuming rebuilds the due
+    dates from now on the policy's calendar, so a weekend spent on hold is not handed
+    back to the customer as extra time.
+  - **No `EscalationRule` table.** An escalation is an `AutomationRule` on the
+    `SLA_WARNING` / `SLA_BREACHED` trigger — one engine, one run log.
+  - `TicketStatus.pausesSla` marks statuses that stop the clock (On Hold and Pending by
+    default). `AutomationRun` records every evaluation, matched or not, with the action
+    outcomes, so "why didn't my rule fire" is answerable from the data.
 - **Phase 4** — `KbCategory`, `KbArticle` (tsvector column + GIN index), `KbArticleFeedback`, `WebForm`, `CommunityTopic`, `CommunityPost`, `CommunityVote`.
 - **Phase 5** — `Channel`, `EmailInbox`, `EmailMessageRef`, `ChatConversation`, `CallLog`, `WebhookEndpoint`, `WebhookDelivery`.
 - **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
