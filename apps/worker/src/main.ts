@@ -14,6 +14,8 @@ import {
 } from './processors/deliver-notification.processor';
 import { handleChannelSend, type ChannelSendJob } from './processors/channel-send.processor';
 import { handleWebhookDelivery, type WebhookDeliveryJob } from './processors/webhook.processor';
+import { handleAiAnalyse, type AiAnalyseJob } from './processors/ai.processor';
+import type { AiDeps } from '@digisoft/ai';
 
 const env = loadEnv();
 const logger = pino({ level: env.LOG_LEVEL, name: 'worker' });
@@ -24,6 +26,13 @@ const emailProvider = createEmailProvider(env);
 const emailQueue = new Queue('email', { connection: connection.duplicate() });
 const automationQueue = new Queue<TriggerJob>(AUTOMATION_QUEUE, { connection: connection.duplicate() });
 const slaQueue = new Queue(SLA_QUEUE, { connection: connection.duplicate() });
+
+const aiDeps: AiDeps = {
+  prisma,
+  encryptionKey: env.CHANNEL_ENCRYPTION_KEY,
+  log: (level, message, meta) =>
+    logger[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info'](meta ?? {}, message),
+};
 
 const engineDeps: EngineDeps = {
   prisma,
@@ -70,6 +79,13 @@ const webhookWorker = new Worker<WebhookDeliveryJob>(
   { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
 );
 
+const aiWorker = new Worker<AiAnalyseJob>(
+  'ai',
+  (job: Job<AiAnalyseJob>) => handleAiAnalyse(job, { ...aiDeps, logger }),
+  // The assistant is the slowest thing the worker does; keep it off the other lanes.
+  { connection: connection.duplicate(), concurrency: 2 },
+);
+
 const slaWorker = new Worker(
   SLA_QUEUE,
   () => handleSlaScan(engineDeps, automationQueue),
@@ -92,6 +108,7 @@ for (const worker of [
   slaWorker,
   channelWorker,
   webhookWorker,
+  aiWorker,
 ]) {
   worker.on('failed', (job, error) => {
     logger.error(
