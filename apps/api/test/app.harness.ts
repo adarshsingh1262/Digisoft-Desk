@@ -45,6 +45,8 @@ export async function createHarness(): Promise<Harness> {
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      activities, automation_runs, automation_rules, assignment_rules,
+      blueprint_transitions, blueprints, sla_targets, sla_policies,
       attachments, ticket_links, ticket_followers, ticket_tags, ticket_messages,
       tickets, tags, ticket_categories, ticket_priorities, ticket_statuses,
       audit_logs, notifications, verification_tokens, refresh_tokens,
