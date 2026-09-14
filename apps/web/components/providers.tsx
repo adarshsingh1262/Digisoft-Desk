@@ -16,8 +16,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 30_000,
             retry: (failureCount, error) => {
-              // Never retry a rejection the user has to act on.
-              if (error instanceof ApiError && [400, 401, 403, 404, 409].includes(error.status)) {
+              // Never retry a rejection the user has to act on — and never retry a 429,
+              // which would spend the remaining budget making the throttling worse.
+              if (
+                error instanceof ApiError &&
+                [400, 401, 403, 404, 409, 413, 415, 429].includes(error.status)
+              ) {
                 return false;
               }
               return failureCount < 2;

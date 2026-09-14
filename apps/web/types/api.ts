@@ -135,3 +135,146 @@ export interface Notification {
   readAt: string | null;
   createdAt: string;
 }
+
+export interface TicketStatusRef {
+  id: string;
+  name: string;
+  color: string;
+  isResolved: boolean;
+  isClosed: boolean;
+}
+
+export interface TicketStatusConfig extends TicketStatusRef {
+  systemKey: string | null;
+  position: number;
+  isDefault: boolean;
+  isSystem: boolean;
+}
+
+export interface TicketPriorityRef {
+  id: string;
+  name: string;
+  color: string;
+  weight: number;
+}
+
+export interface TicketPriorityConfig extends TicketPriorityRef {
+  systemKey: string | null;
+  position: number;
+  isDefault: boolean;
+  isSystem: boolean;
+}
+
+export interface TicketCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  parentId: string | null;
+}
+
+export interface TagRef {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TagWithCount extends TagRef {
+  _count: { tickets: number };
+}
+
+export interface TicketSummary {
+  id: string;
+  ticketNumber: number;
+  subject: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  dueAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  status: TicketStatusRef;
+  priority: TicketPriorityRef;
+  category: { id: string; name: string } | null;
+  department: DepartmentRef | null;
+  assignedAgent: { id: string; firstName: string; lastName: string; email: string } | null;
+  contact: { id: string; firstName: string; lastName: string | null; email: string | null } | null;
+  account: { id: string; name: string } | null;
+  tags: { tag: TagRef }[];
+  _count: { messages: number; attachments: number };
+}
+
+export interface TicketDetail extends Omit<TicketSummary, 'contact'> {
+  description: string;
+  resolutionNote: string | null;
+  firstResponseAt: string | null;
+  customFields: Record<string, unknown> | null;
+  mergedIntoTicketId: string | null;
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+  contact:
+    | {
+        id: string;
+        firstName: string;
+        lastName: string | null;
+        email: string | null;
+        phone: string | null;
+        jobTitle: string | null;
+        isVip: boolean;
+        account: { id: string; name: string } | null;
+      }
+    | null;
+  followers: { userId: string }[];
+  links: {
+    id: string;
+    type: string;
+    linkedTicket: {
+      id: string;
+      ticketNumber: number;
+      subject: string;
+      status: { name: string; color: string };
+    };
+  }[];
+}
+
+export interface TicketAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  messageId: string | null;
+  createdAt: string;
+  uploadedBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  type: 'PUBLIC_REPLY' | 'INTERNAL_COMMENT' | 'SYSTEM_NOTE';
+  direction: 'INBOUND' | 'OUTBOUND';
+  bodyText: string;
+  bodyHtml: string | null;
+  channel: string;
+  createdAt: string;
+  authorUser: { id: string; firstName: string; lastName: string; email: string } | null;
+  authorContact: { id: string; firstName: string; lastName: string | null; email: string | null } | null;
+  attachments: TicketAttachment[];
+}
+
+export interface TicketHistoryEntry {
+  id: string;
+  action: string;
+  actorId: string | null;
+  actorType: string;
+  oldValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown> | null;
+  createdAt: string;
+  actor: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface TicketQueueSummary {
+  total: number;
+  open: number;
+  unassigned: number;
+  assignedToMe: number;
+  resolved: number;
+  byStatus: { statusId: string; _count: { _all: number } }[];
+}
