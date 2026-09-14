@@ -1,0 +1,224 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { io, type Socket } from 'socket.io-client';
+import { MessageCircle, Send, X } from 'lucide-react';
+import { ApiError } from '@/lib/api-client';
+import { chatWidgetService } from '@/services/chat.service';
+import type { ChatMessageDto } from '@/types/api';
+import { Button } from '@/components/ui/button';
+import { Input, Textarea } from '@/components/ui/input';
+
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? 'http://localhost:4000';
+
+interface Line {
+  id: string;
+  body: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  author?: string;
+  createdAt: string;
+}
+
+const toLine = (message: ChatMessageDto): Line => ({
+  id: message.id,
+  body: message.bodyText,
+  direction: message.direction,
+  author: message.authorUser
+    ? `${message.authorUser.firstName} ${message.authorUser.lastName}`.trim()
+    : undefined,
+  createdAt: message.createdAt,
+});
+
+/**
+ * The help center's chat widget. It holds the session token in memory only, listens on
+ * its own socket namespace for the agent's replies, and falls back to nothing more than
+ * a form if chat is switched off for this organization.
+ */
+export function ChatWidget({ slug }: { slug: string }) {
+  const api = chatWidgetService(slug);
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [draft, setDraft] = useState({ name: '', email: '', message: '' });
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ended, setEnded] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null);
+
+  const config = useQuery({ queryKey: ['chat-widget', slug], queryFn: api.config });
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    const socket: Socket = io(`${SOCKET_URL}/chat`, {
+      auth: { token },
+      transports: ['websocket'],
+    });
+    socket.on('chat.message', (message: Line & { sessionId: string }) => {
+      setLines((current) =>
+        current.some((line) => line.id === message.id) ? current : [...current, message],
+      );
+    });
+    socket.on('chat.ended', () => setEnded(true));
+    return () => {
+      socket.close();
+    };
+  }, [token]);
+
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines.length]);
+
+  if (!config.data?.enabled) {
+    return null;
+  }
+
+  const start = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const result = await api.start({
+        name: draft.name || null,
+        email: draft.email || null,
+        message: draft.message,
+        pageUrl: typeof window === 'undefined' ? null : window.location.href,
+      });
+      setToken(result.token);
+      const transcript = await api.transcript(result.token);
+      setLines(transcript.messages.map(toLine));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to start the chat.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = async () => {
+    if (!token || !body.trim()) {
+      return;
+    }
+    const text = body;
+    setBody('');
+    try {
+      const created = await api.send(token, text);
+      setLines((current) => [
+        ...current,
+        { id: created.id, body: text, direction: 'INBOUND', createdAt: new Date().toISOString() },
+      ]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Message not sent.');
+      setBody(text);
+    }
+  };
+
+  return (
+    <>
+      {open ? (
+        <section
+          aria-label="Live chat"
+          className="fixed bottom-20 right-4 z-40 flex h-[28rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-border bg-background shadow-xl"
+        >
+          <header
+            className="flex items-center justify-between px-4 py-3 text-white"
+            style={{ backgroundColor: config.data.primaryColor }}
+          >
+            <span className="text-sm font-semibold">{config.data.name}</span>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </header>
+
+          {!token ? (
+            <form className="flex-1 space-y-3 overflow-y-auto p-4" onSubmit={start}>
+              <p className="text-sm text-muted-foreground">{config.data.greeting}</p>
+              <Input
+                placeholder="Your name"
+                aria-label="Your name"
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              />
+              <Input
+                type="email"
+                placeholder="Email address"
+                aria-label="Email address"
+                required={config.data.requireEmail}
+                value={draft.email}
+                onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+              />
+              <Textarea
+                rows={3}
+                placeholder="How can we help?"
+                aria-label="Your message"
+                required
+                value={draft.message}
+                onChange={(event) => setDraft({ ...draft, message: event.target.value })}
+              />
+              {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+              <Button type="submit" className="w-full" loading={busy}>
+                Start chatting
+              </Button>
+            </form>
+          ) : (
+            <>
+              <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                {lines.map((line) => (
+                  <div
+                    key={line.id}
+                    className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                      line.direction === 'INBOUND' ? 'ml-auto bg-muted' : 'bg-primary/10'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{line.body}</p>
+                    {line.direction === 'OUTBOUND' && line.author ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">{line.author}</p>
+                    ) : null}
+                  </div>
+                ))}
+                {ended ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    This chat has ended. We will follow up on your request by email.
+                  </p>
+                ) : null}
+                <div ref={bottom} />
+              </div>
+
+              {!ended ? (
+                <div className="flex gap-2 border-t border-border p-3">
+                  <Input
+                    value={body}
+                    placeholder="Type a message"
+                    aria-label="Message"
+                    onChange={(event) => setBody(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void send();
+                      }
+                    }}
+                  />
+                  <Button size="icon" aria-label="Send message" onClick={() => void send()}>
+                    <Send className="h-4 w-4" aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label={open ? 'Hide chat' : 'Chat with us'}
+        className="fixed bottom-4 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105"
+        style={{ backgroundColor: config.data.primaryColor }}
+      >
+        {open ? <X className="h-5 w-5" aria-hidden /> : <MessageCircle className="h-5 w-5" aria-hidden />}
+      </button>
+    </>
+  );
+}

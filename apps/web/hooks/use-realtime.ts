@@ -54,6 +54,11 @@ export function useRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
+    socket.on('chat.started', () => {
+      void queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    });
+
     return () => {
       socket.close();
     };

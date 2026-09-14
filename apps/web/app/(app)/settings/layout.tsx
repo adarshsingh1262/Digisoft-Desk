@@ -20,6 +20,9 @@ const TABS = [
   },
   { href: '/settings/help-center', label: 'Help center', permission: PERMISSIONS.PORTAL_READ },
   { href: '/settings/web-forms', label: 'Web forms', permission: PERMISSIONS.PORTAL_READ },
+  { href: '/settings/channels', label: 'Channels', permission: PERMISSIONS.CHANNEL_READ },
+  { href: '/settings/webhooks', label: 'Webhooks', permission: PERMISSIONS.WEBHOOK_READ },
+  { href: '/settings/api-keys', label: 'API keys', permission: PERMISSIONS.APIKEY_MANAGE },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

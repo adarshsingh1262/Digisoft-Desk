@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { ApiError } from '@/lib/api-client';
 import { usePortalSession } from './portal-session';
+import { ChatWidget } from './chat-widget';
 
 /** Header, navigation and footer for a help center, branded from its own settings. */
 export function PortalShell({ slug, children }: { slug: string; children: React.ReactNode }) {
@@ -112,6 +113,8 @@ export function PortalShell({ slug, children }: { slug: string; children: React.
       <main id="main" className="mx-auto w-full max-w-5xl flex-1 space-y-6 px-4 py-6">
         {children}
       </main>
+
+      <ChatWidget slug={slug} />
 
       <footer className="border-t border-border bg-background">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground">

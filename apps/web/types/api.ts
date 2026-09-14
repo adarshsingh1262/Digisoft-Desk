@@ -682,3 +682,146 @@ export interface PortalTicketOptions {
   categories: { id: string; name: string }[];
   priorities: { id: string; name: string; color: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — omnichannel, webhooks and API keys
+// ---------------------------------------------------------------------------
+
+export type ChannelTypeDto =
+  | 'EMAIL'
+  | 'CHAT'
+  | 'WHATSAPP'
+  | 'INSTAGRAM'
+  | 'FACEBOOK'
+  | 'TELEGRAM'
+  | 'VOICE';
+
+export interface Channel {
+  id: string;
+  type: ChannelTypeDto;
+  provider: string;
+  name: string;
+  identifier: string | null;
+  isActive: boolean;
+  config: Record<string, unknown>;
+  departmentId: string | null;
+  priorityId: string | null;
+  categoryId: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  department: { id: string; name: string } | null;
+  priority: { id: string; name: string; color: string } | null;
+  category: { id: string; name: string } | null;
+  configuredSecrets: string[];
+  canSend: boolean;
+  _count: { events: number };
+  /** Only present in the response that created or rotated it. */
+  webhookUrl?: string;
+}
+
+export interface ChannelCatalogue {
+  providers: Record<ChannelTypeDto, string[]>;
+  secretFields: Record<string, { key: string; label: string; required: boolean }[]>;
+}
+
+export interface ChannelEvent {
+  id: string;
+  externalId: string;
+  status: 'RECEIVED' | 'PROCESSED' | 'IGNORED' | 'FAILED';
+  error: string | null;
+  ticketId: string | null;
+  messageId: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  channel: { id: string; name: string; type: ChannelTypeDto };
+}
+
+export interface WebhookEndpointDto {
+  id: string;
+  name: string;
+  url: string;
+  events: string[];
+  isActive: boolean;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  failureCount: number;
+  createdAt: string;
+  _count: { deliveries: number };
+  /** Returned once, when the endpoint is created or its secret is rotated. */
+  secret?: string;
+}
+
+export interface WebhookDeliveryDto {
+  id: string;
+  event: string;
+  status: 'PENDING' | 'DELIVERED' | 'FAILED';
+  attempts: number;
+  responseStatus: number | null;
+  error: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  endpoint: { id: string; name: string; url: string };
+}
+
+export interface ApiKeyDto {
+  id: string;
+  name: string;
+  prefix: string;
+  userId: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  role: { id: string; name: string; systemKey: string | null };
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+  /** Returned once, at creation. */
+  key?: string;
+}
+
+export interface ChatSessionDto {
+  id: string;
+  status: 'QUEUED' | 'ACTIVE' | 'ENDED';
+  visitorName: string | null;
+  visitorEmail: string | null;
+  pageUrl: string | null;
+  startedAt: string;
+  lastSeenAt: string;
+  endedAt: string | null;
+  rating: number | null;
+  ticketId: string | null;
+  contactId: string | null;
+  ticket: {
+    id: string;
+    ticketNumber: number;
+    subject: string;
+    status: { id: string; name: string; color: string };
+    assignedAgent: { id: string; firstName: string; lastName: string } | null;
+  } | null;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  bodyText: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  createdAt: string;
+  authorUser: { id: string; firstName: string; lastName: string } | null;
+  authorContact: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface ChatTranscript {
+  session: ChatSessionDto;
+  messages: ChatMessageDto[];
+}
+
+export interface ChatWidgetConfig {
+  enabled: boolean;
+  name: string;
+  primaryColor: string;
+  greeting: string;
+  offlineMessage: string;
+  requireEmail: boolean;
+}

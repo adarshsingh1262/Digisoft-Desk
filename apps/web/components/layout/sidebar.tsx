@@ -6,6 +6,7 @@ import {
   BookOpen,
   Building2,
   ClipboardList,
+  MessageCircle,
   MessagesSquare,
   LayoutDashboard,
   Settings,
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { href: '/accounts', label: 'Accounts', icon: Building2, permission: PERMISSIONS.ACCOUNT_READ },
   { href: '/knowledge-base', label: 'Knowledge base', icon: BookOpen, permission: PERMISSIONS.KB_READ },
   { href: '/community', label: 'Community', icon: MessagesSquare, permission: PERMISSIONS.COMMUNITY_MODERATE },
+  { href: '/chat', label: 'Live chat', icon: MessageCircle, permission: PERMISSIONS.CHAT_HANDLE },
   { href: '/automation/rules', label: 'Automation', icon: Workflow, permission: PERMISSIONS.OPERATIONS_READ },
   { href: '/settings/organization', label: 'Settings', icon: Settings, permission: PERMISSIONS.ORGANIZATION_READ },
 ];
@@ -107,7 +109,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phases 1–4 · Foundation, helpdesk, operations, self-service
+          Phases 1–5 · helpdesk, operations, self-service, omnichannel
         </p>
       </aside>
     </>
