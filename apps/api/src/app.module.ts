@@ -19,6 +19,9 @@ import { StorageModule } from './storage/storage.module';
 import { TicketConfigModule } from './ticket-config/ticket-config.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { EngineModule } from './engine/engine.module';
+import { ActivitiesModule } from './activities/activities.module';
+import { OperationsModule } from './operations/operations.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
@@ -87,8 +90,11 @@ import { PermissionCatalogueService } from './bootstrap/permission-catalogue.ser
     AccountsModule,
     StorageModule,
     TicketConfigModule,
+    EngineModule,
     TicketsModule,
     AttachmentsModule,
+    ActivitiesModule,
+    OperationsModule,
     NotificationsModule,
     HealthModule,
   ],

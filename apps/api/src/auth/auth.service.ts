@@ -18,6 +18,7 @@ import { AccessControlService } from './access-control.service';
 import { MailerService } from '../email/mailer.service';
 import {
   DEFAULT_BUSINESS_HOURS,
+  provisionSlaDefaults,
   provisionSystemRoles,
   provisionTicketDefaults,
 } from '@digisoft/db';
@@ -100,6 +101,7 @@ export class AuthService {
       // Statuses, priorities and categories, so the organization can raise a ticket
       // the moment registration finishes.
       await provisionTicketDefaults(tx, organization.id);
+      await provisionSlaDefaults(tx, organization.id);
 
       const user = await tx.user.create({
         data: {

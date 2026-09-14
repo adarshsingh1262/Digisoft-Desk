@@ -205,6 +205,12 @@ export class TicketsController {
   }
 
   @RequirePermissions(PERMISSIONS.TICKET_READ)
+  @Get(':id/transitions')
+  transitions(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tickets.transitions(id, user);
+  }
+
+  @RequirePermissions(PERMISSIONS.TICKET_READ)
   @Get(':id/history')
   history(
     @Param('id') id: string,

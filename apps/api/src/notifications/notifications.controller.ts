@@ -1,12 +1,12 @@
 import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { paginationQuerySchema, type AuthenticatedUser } from '@digisoft/shared';
+import { paginationQuerySchema, queryBoolean, type AuthenticatedUser } from '@digisoft/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { zodBody } from '../common/pipes/zod-validation.pipe';
 import { NotificationsService } from './notifications.service';
 
 const listQuerySchema = paginationQuerySchema.extend({
-  unreadOnly: z.coerce.boolean().optional(),
+  unreadOnly: queryBoolean.optional(),
 });
 type ListQuery = z.infer<typeof listQuerySchema>;
 

@@ -11,6 +11,7 @@ import { TicketsService } from './tickets.service';
 import { TicketEventsService } from './ticket-events.service';
 import { MESSAGE_SELECT } from './ticket.select';
 import { canReadInternalNotes } from './ticket-visibility';
+import { EngineService } from '../engine/engine.service';
 
 @Injectable()
 export class TicketMessagesService {
@@ -20,6 +21,7 @@ export class TicketMessagesService {
     private readonly notifications: NotificationsService,
     private readonly events: TicketEventsService,
     private readonly audit: AuditService,
+    private readonly engine: EngineService,
   ) {}
 
   async list(
@@ -128,6 +130,9 @@ export class TicketMessagesService {
 
     this.events.messageCreated(actor.organizationId, ticket, { id: message.id, type });
     await this.notifyFollowers(actor, ticket, type);
+    if (type === 'PUBLIC_REPLY') {
+      await this.engine.trigger(actor.organizationId, ticketId, 'AGENT_REPLIED');
+    }
 
     return message.attachments.length === input.attachmentIds.length
       ? message

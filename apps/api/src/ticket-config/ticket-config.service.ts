@@ -20,6 +20,7 @@ const STATUS_FIELDS = {
   isDefault: true,
   isResolved: true,
   isClosed: true,
+  pausesSla: true,
   isSystem: true,
 } as const;
 

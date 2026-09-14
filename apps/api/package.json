@@ -39,7 +39,8 @@
     "@digisoft/db": "workspace:*",
     "@aws-sdk/client-s3": "^3.850.0",
     "@aws-sdk/s3-request-presigner": "^3.850.0",
-    "multer": "^2.0.0"
+    "multer": "^2.0.0",
+    "@digisoft/engine": "workspace:*"
   },
   "devDependencies": {
     "@digisoft/tsconfig": "workspace:*",

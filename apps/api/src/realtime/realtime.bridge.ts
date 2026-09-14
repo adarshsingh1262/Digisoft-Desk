@@ -8,6 +8,8 @@ export const RT_BRIDGE_CHANNEL = 'rt:emit';
 export interface RealtimeEnvelope {
   organizationId: string;
   userId?: string;
+  /** Ticket audience rooms, so a worker-originated ticket event is scoped like an API one. */
+  audience?: { departmentId: string | null; assignedAgentId: string | null };
   event: string;
   payload: unknown;
 }
@@ -32,7 +34,14 @@ export class RealtimeBridge implements OnModuleInit, OnModuleDestroy {
     this.subscriber.on('message', (_channel, raw) => {
       try {
         const envelope = JSON.parse(raw) as RealtimeEnvelope;
-        if (envelope.userId) {
+        if (envelope.audience) {
+          this.gateway.emitToTicketAudience(
+            envelope.organizationId,
+            envelope.audience,
+            envelope.event,
+            envelope.payload,
+          );
+        } else if (envelope.userId) {
           this.gateway.emitToUser(
             envelope.organizationId,
             envelope.userId,

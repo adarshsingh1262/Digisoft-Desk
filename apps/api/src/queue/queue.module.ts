@@ -6,6 +6,8 @@ import { QUEUE_NAMES } from './queue.constants';
 
 export const EMAIL_QUEUE = Symbol('EMAIL_QUEUE');
 export const NOTIFICATION_QUEUE = Symbol('NOTIFICATION_QUEUE');
+export const AUTOMATION_QUEUE_TOKEN = Symbol('AUTOMATION_QUEUE');
+export const SLA_QUEUE_TOKEN = Symbol('SLA_QUEUE');
 
 const defaultJobOptions = {
   attempts: 5,
@@ -28,8 +30,14 @@ function queueFactory(name: string) {
       inject: [REDIS_CLIENT],
       useFactory: queueFactory(QUEUE_NAMES.NOTIFICATIONS),
     },
+    {
+      provide: AUTOMATION_QUEUE_TOKEN,
+      inject: [REDIS_CLIENT],
+      useFactory: queueFactory(QUEUE_NAMES.AUTOMATION),
+    },
+    { provide: SLA_QUEUE_TOKEN, inject: [REDIS_CLIENT], useFactory: queueFactory(QUEUE_NAMES.SLA) },
   ],
-  exports: [EMAIL_QUEUE, NOTIFICATION_QUEUE],
+  exports: [EMAIL_QUEUE, NOTIFICATION_QUEUE, AUTOMATION_QUEUE_TOKEN, SLA_QUEUE_TOKEN],
 })
 export class QueueModule implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {

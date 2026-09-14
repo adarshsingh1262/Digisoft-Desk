@@ -21,6 +21,7 @@ import type { Paginated } from '../common/interceptors/response.interceptor';
 import { TicketConfigService } from '../ticket-config/ticket-config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TicketEventsService } from './ticket-events.service';
+import { EngineService } from '../engine/engine.service';
 import { TICKET_DETAIL_SELECT, TICKET_LIST_SELECT } from './ticket.select';
 import { ticketVisibilityFilter } from './ticket-visibility';
 
@@ -41,6 +42,7 @@ export class TicketsService {
     private readonly notifications: NotificationsService,
     private readonly events: TicketEventsService,
     private readonly audit: AuditService,
+    private readonly engine: EngineService,
   ) {}
 
   async list(actor: AuthenticatedUser, query: ListTicketsQuery): Promise<Paginated<unknown>> {
@@ -131,7 +133,7 @@ export class TicketsService {
     const priorityId = input.priorityId ?? (await this.config.defaultPriorityId());
     const accountId = input.accountId ?? (await this.accountIdForContact(input.contactId));
 
-    const ticket = await this.db.$transaction(async (tx) => {
+    const created = await this.db.$transaction(async (tx) => {
       // The counter lives on the organization row, so the increment is serialised by
       // the row lock and two concurrent creates cannot share a number.
       const organization = await tx.organization.update({
@@ -168,14 +170,26 @@ export class TicketsService {
       actorId: actor.id,
       action: 'ticket.created',
       entity: 'Ticket',
-      entityId: ticket.id,
-      newValue: { ticketNumber: ticket.ticketNumber, subject: ticket.subject },
+      entityId: created.id,
+      newValue: { ticketNumber: created.ticketNumber, subject: created.subject },
     });
+
+    // Assignment rules only route what the agent left unassigned; SLA always applies.
+    const routed =
+      created.assignedAgent || created.department
+        ? null
+        : await this.engine.routeNewTicket(actor.organizationId, created.id);
+    await this.engine.applySlaToTicket(actor.organizationId, created.id);
+
+    const ticket = await this.db.ticket.findUniqueOrThrow({ where: { id: created.id }, select: TICKET_DETAIL_SELECT });
     this.events.ticketCreated(actor, ticket);
 
     if (ticket.assignedAgent && ticket.assignedAgent.id !== actor.id) {
       await this.notifyAssignment(actor, ticket.id, ticket.assignedAgent.id, ticket);
     }
+    await this.engine.trigger(actor.organizationId, ticket.id, 'TICKET_CREATED', {
+      routedBy: routed?.ruleName ?? null,
+    });
     return ticket;
   }
 
@@ -202,6 +216,7 @@ export class TicketsService {
       newValue: { subject: ticket.subject, departmentId: ticket.department?.id ?? null },
     });
     this.events.ticketUpdated(actor, ticket);
+    await this.engine.trigger(actor.organizationId, id, 'TICKET_UPDATED');
     return ticket;
   }
 
@@ -245,6 +260,7 @@ export class TicketsService {
     if (newAssignee && newAssignee !== before.assignedAgent?.id && newAssignee !== actor.id) {
       await this.notifyAssignment(actor, id, newAssignee, ticket);
     }
+    await this.engine.trigger(actor.organizationId, id, 'TICKET_ASSIGNED');
     return ticket;
   }
 
@@ -258,11 +274,25 @@ export class TicketsService {
       throw AppError.notFound('ticket status');
     }
 
+    if (status.id === before.status.id) {
+      return before;
+    }
+
     // A resolution note is required to mark a ticket solved, whichever status the
     // organization has flagged as resolving.
     const resolutionNote = input.resolutionNote ?? before.resolutionNote;
     if (status.isResolved && !resolutionNote) {
       throw AppError.validation('A resolution note is required to resolve a ticket');
+    }
+
+    // The governing blueprint, if any, decides whether this move is allowed at all.
+    const check = await this.engine.checkStatusChange(actor.organizationId, id, status.id, actor, {
+      resolutionNote: input.resolutionNote,
+    });
+    if (!check.ok) {
+      throw AppError.validation(check.reason ?? 'This transition is not allowed', {
+        missingFields: check.missingFields ?? [],
+      });
     }
 
     const now = new Date();
@@ -284,10 +314,21 @@ export class TicketsService {
       entity: 'Ticket',
       entityId: id,
       oldValue: { status: before.status.name },
-      newValue: { status: ticket.status.name },
+      newValue: { status: ticket.status.name, ...(check.governed ? { transition: check.transition?.name } : {}) },
     });
-    this.events.ticketStatusChanged(actor, ticket);
-    return ticket;
+
+    await this.engine.syncSlaPause(actor.organizationId, id, ticket.status.pausesSla);
+    if (check.transition) {
+      await this.engine.runTransitionActions(actor.organizationId, id, check.transition);
+    }
+
+    const fresh = await this.db.ticket.findUniqueOrThrow({ where: { id }, select: TICKET_DETAIL_SELECT });
+    this.events.ticketStatusChanged(actor, fresh);
+    await this.engine.trigger(actor.organizationId, id, 'STATUS_CHANGED', {
+      from: before.status.name,
+      to: fresh.status.name,
+    });
+    return fresh;
   }
 
   async changePriority(id: string, actor: AuthenticatedUser, input: ChangePriorityInput) {
@@ -315,8 +356,18 @@ export class TicketsService {
       oldValue: { priority: before.priority.name },
       newValue: { priority: ticket.priority.name },
     });
-    this.events.ticketUpdated(actor, ticket);
-    return ticket;
+
+    // Targets are per priority, so the clock is re-derived from the original creation time.
+    if (!ticket.status.isResolved && !ticket.status.isClosed) {
+      await this.engine.applySlaToTicket(actor.organizationId, id);
+    }
+    const fresh = await this.db.ticket.findUniqueOrThrow({ where: { id }, select: TICKET_DETAIL_SELECT });
+    this.events.ticketUpdated(actor, fresh);
+    await this.engine.trigger(actor.organizationId, id, 'PRIORITY_CHANGED', {
+      from: before.priority.name,
+      to: fresh.priority.name,
+    });
+    return fresh;
   }
 
   async resolve(id: string, actor: AuthenticatedUser, input: ResolveTicketInput) {
@@ -356,6 +407,7 @@ export class TicketsService {
       data: { statusId: status.id, resolvedAt: null, closedAt: null },
       select: TICKET_DETAIL_SELECT,
     });
+    await this.engine.syncSlaPause(actor.organizationId, id, ticket.status.pausesSla);
 
     await this.audit.record({
       organizationId: actor.organizationId,
@@ -367,7 +419,14 @@ export class TicketsService {
       newValue: { status: ticket.status.name },
     });
     this.events.ticketStatusChanged(actor, ticket);
+    await this.engine.trigger(actor.organizationId, id, 'STATUS_CHANGED', { from: before.status.name, to: ticket.status.name });
     return ticket;
+  }
+
+  /** Blueprint transitions the actor may take from the ticket's current status. */
+  async transitions(id: string, actor: AuthenticatedUser) {
+    await this.assertVisible(actor, id);
+    return this.engine.transitionsFor(actor.organizationId, id, actor);
   }
 
   async setTags(id: string, actor: AuthenticatedUser, tagIds: string[]) {
