@@ -109,3 +109,16 @@ from, and `CORS`/cookie settings are shared with the agent app.
 Outbound email for an email channel uses the deployment's existing `EMAIL_PROVIDER`
 settings; the channel supplies the from-address, display name, reply-to and signature.
 
+
+## Phase 6 — the assistant
+
+Phase 6 introduced no required environment variables: the built-in provider is the
+default and needs nothing. Two existing ones matter to it:
+
+- `CHANNEL_ENCRYPTION_KEY` also encrypts the Anthropic API key stored in `AiSettings`,
+  so the **worker needs the same value** to run auto-analysis against Anthropic.
+- `REDIS_URL` carries the `ai` queue that auto-analysis runs on.
+
+The Anthropic API key is per organization and is entered in the app (Settings →
+Assistant), not in the environment, so two tenants on one deployment bill separately and
+neither key is readable from the API.

@@ -360,16 +360,32 @@ a machine caller is authorised by the same permission checks, appears in the aud
 and owns the records it creates. Revoking a key deactivates that user, closing every
 path in one step.
 
-## AI — P6
+## AI — P6 (implemented)
 ```
-GET|PATCH /ai/settings
-POST /ai/tickets/:id/summary
-POST /ai/tickets/:id/sentiment
-POST /ai/tickets/:id/intent
-POST /ai/tickets/:id/suggest-reply     # returns a draft; never sends
-POST /ai/answers                       # KB-grounded answer
-GET  /ai/usage
+GET    /ai/settings                    # ai.use — provider, model, toggles, budget, hasApiKey
+PATCH  /ai/settings                    # ai.manage — apiKey is write-only; "" clears it
+GET    /ai/catalogue                   # ai.use — providers and the pinned model list with prices
+POST   /ai/test                        # ai.manage — one real request to the configured provider
+GET    /ai/usage                       # ai.use — this month's calls, tokens, cost, budget, by type
+
+GET    /tickets/:id/ai                 # ai.use — latest insight of each kind for the ticket
+GET    /tickets/:id/ai/articles        # ai.use — knowledge base articles that match the ticket
+POST   /tickets/:id/ai                 # ai.use — { type, refresh } -> generates one insight
 ```
+`type` is `SUMMARY`, `SENTIMENT`, `INTENT` or `SUGGESTED_REPLY`. Without `refresh`, an
+insight generated since the last message on the ticket is returned as it stands rather
+than paid for again.
+
+Two providers implement the same interface: `ANTHROPIC` (the official SDK, one of four
+pinned models) and `HEURISTIC`, a rule-based analyser that runs in-process and needs no
+credentials — it is the default, so the assistant works out of the box.
+
+Responses never contain the stored API key; `hasApiKey` says whether one is held.
+A request is refused with `VALIDATION_ERROR` when the assistant is off, the individual
+feature is off, or the organization's monthly token budget is spent. The suggested reply
+is a draft returned to the agent — nothing is ever sent to a customer, and an intent's
+category and priority are applied only when the agent presses the button. Internal
+comments are never included in what is sent to a provider.
 
 ## Analytics — P7
 ```

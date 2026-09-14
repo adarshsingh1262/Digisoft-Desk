@@ -322,7 +322,22 @@ model AuditLog {
 - **Phase 5 (planned, not built)** — a provider-agnostic outbound *email send* per
   channel (today outbound email uses the deployment's configured provider) and IMAP
   polling for mailboxes without a webhook relay.
-- **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
+- **Phase 6 (built)** — `AiSettings`, `AiInsight` and the enums `AiProviderKind`,
+  `AiInsightType`, `AiInsightStatus`. Two decisions differ from the sketch:
+  - **One `AiInsight` table instead of `AiRequestLog` beside it.** Every call is stored
+    as a row whatever its outcome, carrying the result (`content` JSON), the provider and
+    model, input/output tokens, `costMicros`, `latencyMs` and, on a failure, `error` with
+    `status = FAILED`. The log *is* the result, so usage, cost, budget enforcement and
+    "what did it last say about this ticket" all read one table, and a failure is
+    debuggable without a second write path.
+  - **`AiSettings` replaces `AiProviderConfig`, one row per organization** (`@unique`
+    organizationId), holding the provider, model, per-feature switches, auto-analysis,
+    the monthly token budget and free-text guidance. The API key lives in `secrets`,
+    encrypted with the same AES-256-GCM helper as channel credentials, and is never
+    selected into a response. The row is created on first read, and a create that loses
+    the race re-reads instead of failing.
+  - `pgvector` and `KbArticleEmbedding` are still later work: retrieval today is keyword
+    scoring over published articles (title ×3, summary ×2, body ×1).
 - **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
 
 ## 4a. Ticket numbering
@@ -363,6 +378,10 @@ createdAt)`, unique `ChannelIdentity(organizationId, type, externalId)`,
 `WebhookDelivery(status)`, unique `ApiKey.keyHash`, and unique
 `Activity(organizationId, externalCallId)` so a telephony provider can post the same
 call several times without duplicating it.
+
+Phase 6 adds: unique `AiSettings(organizationId)`, `AiInsight(organizationId,
+ticketId, type, createdAt)` for "latest of each kind on this ticket", and
+`AiInsight(organizationId, createdAt)` for the monthly usage and budget queries.
 
 Phase 4 adds: `KbArticle(status, visibility)`, `KbArticle(categoryId, position)`,
 `KbCategory(parentId, position)`, `WebForm(isActive)`, `CommunityTopic(categoryId,

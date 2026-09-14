@@ -7,6 +7,7 @@ Three route groups with separate layouts and separate auth expectations.
 /dashboard
 /tickets                      list + saved views (?view=my_open)
 /tickets/[id]                 3-pane workspace: list | conversation | details
+                              tabs: conversation | assistant | activities | history
 /activities                   ?type=tasks|calls|events
 /customers                    contacts list
 /customers/[id]
@@ -16,9 +17,8 @@ Three route groups with separate layouts and separate auth expectations.
 /reports  /reports/[reportId]
 /automation/rules  /automation/assignment  /automation/sla  /automation/blueprints
 /chat                                                         live chat inbox
-/ai
 /settings/{organization,users,roles,departments,teams,ticket-fields,help-center,
-          web-forms,channels,webhooks,api-keys}
+          web-forms,channels,webhooks,api-keys,ai}
 ```
 
 ## `(portal)` — the help center, one route group for every tenant (built)

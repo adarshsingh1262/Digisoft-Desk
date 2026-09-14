@@ -76,12 +76,13 @@ Digisoft-Desk/
 │   │   │   ├── channels/         # channel config, inbound webhooks, the ingestion pipeline, outbound
 │   │   │   ├── chat/             # live chat sessions, visitor socket, agent inbox
 │   │   │   ├── integrations/     # outbound webhooks and API keys
-│   │   │   └── (ai, analytics … arrive in later phases)
+│   │   │   ├── ai/               # assistant settings, insights, usage, dispatch
+│   │   │   └── (analytics arrives in a later phase)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
 │   ├── worker/                   # BullMQ consumers; no HTTP surface
-│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook
+│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook, ai
 │   │   └── Dockerfile
 │   │
 │   └── web/                      # Next.js App Router
@@ -95,6 +96,7 @@ Digisoft-Desk/
 ├── packages/
 │   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
 │   ├── channels/                 # channel adapters (verify, parse, send) + credential encryption
+│   ├── ai/                       # assistant providers, prompts, grounding and the analysis path
 │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
 │   ├── shared/                   # Zod schemas + types shared by frontend and backend
 │   └── tsconfig/                 # strict TypeScript bases
@@ -246,6 +248,43 @@ external API — the same publish-and-fan-out shape, without a third party.
 Credentials never leave the API: they are encrypted with AES-256-GCM under
 `CHANNEL_ENCRYPTION_KEY`, the REST layer returns only the *names* of the fields that
 hold a value, and the worker decrypts with the same key when it sends.
+
+## 5e. The assistant
+
+`packages/ai` is the assistant, and like `packages/engine` it is a library the API and
+the worker both call rather than a service either owns. Three layers:
+
+- **Providers.** `AiProvider` is four methods — `summarise`, `sentiment`, `intent`,
+  `suggestReply` — each returning a typed result plus token usage. `AnthropicProvider`
+  calls the official SDK with one of four pinned models and a cached system prompt;
+  `HeuristicProvider` is a rule-based analyser (a sentiment lexicon that understands
+  negation, intent rules that map to the organization's own categories, an extractive
+  summary) that runs in-process, needs no credentials and no network, and is the default
+  so the feature works on a fresh install. Adding a provider means implementing the
+  interface; nothing above this layer knows which one answered.
+- **The data path.** `analyse.ts` loads the organization's settings, builds the provider,
+  gathers the ticket context, retrieves grounding articles, enforces the budget, calls
+  the provider and stores the result. It takes an unscoped Prisma client and an explicit
+  `organizationId`, so the API can run it inside the tenant context and the worker can
+  run it without one.
+- **The surfaces.** `AiService` (API) wraps it for agent requests; `ai.processor`
+  (worker) runs the same code when a ticket is created or a customer replies, if the
+  organization turned auto-analysis on.
+
+Four rules hold whichever provider is configured:
+
+1. **Only what the customer could see leaves the server.** The context is built from
+   public replies alone — an internal comment is never sent to a provider.
+2. **Grounding is explicit.** A suggested reply is drafted against published knowledge
+   base articles retrieved by keyword score; when nothing matches, the draft says so and
+   asks for detail rather than inventing an answer, and the UI shows that it is
+   ungrounded.
+3. **Nothing is applied automatically.** The reply is a draft handed to the composer,
+   and an intent's category and priority are applied only when an agent presses the
+   button.
+4. **Spend is bounded and visible.** Every call is stored with its tokens, cost and
+   latency — failures included — and the monthly token budget is checked before the
+   call, so it is a hard stop rather than a report after the fact.
 
 ## 5a. File storage
 
