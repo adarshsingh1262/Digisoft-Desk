@@ -6,3 +6,4 @@ export * from '@prisma/client';
 export * from './tenant-context';
 export * from './tenant.extension';
 export * from './role-provisioning';
+export * from './ticket-provisioning';

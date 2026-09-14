@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { SYSTEM_ROLES } from '@digisoft/shared';
 import { provisionSystemRoles, syncPermissionCatalogue } from '../src/role-provisioning';
+import { provisionTicketDefaults } from '../src/ticket-provisioning';
 
 const prisma = new PrismaClient();
 
@@ -20,12 +21,15 @@ const DEMO = {
 async function main(): Promise<void> {
   await syncPermissionCatalogue(prisma);
 
+  // Organizations created before a phase added new configuration need it backfilled.
+  await backfillTicketDefaults();
+
   const existing = await prisma.organization.findUnique({
     where: { slug: DEMO.organizationSlug },
     select: { id: true },
   });
   if (existing) {
-    console.log(`Organization "${DEMO.organizationSlug}" already seeded — nothing to do.`);
+    console.log(`Organization "${DEMO.organizationSlug}" already seeded — nothing else to do.`);
     return;
   }
 
@@ -76,7 +80,7 @@ async function main(): Promise<void> {
       },
     });
 
-    await tx.user.create({
+    const admin = await tx.user.create({
       data: {
         organizationId: organization.id,
         email: DEMO.adminEmail,
@@ -87,9 +91,10 @@ async function main(): Promise<void> {
         roles: { create: { roleId: superAdminRoleId } },
         departments: { create: { departmentId: support.id } },
       },
+      select: { id: true },
     });
 
-    await tx.user.create({
+    const agent = await tx.user.create({
       data: {
         organizationId: organization.id,
         email: 'agent@digisoft360.local',
@@ -100,6 +105,7 @@ async function main(): Promise<void> {
         roles: { create: { roleId: agentRoleId } },
         departments: { create: { departmentId: support.id } },
       },
+      select: { id: true },
     });
 
     const account = await tx.account.create({
@@ -113,6 +119,8 @@ async function main(): Promise<void> {
       },
       select: { id: true },
     });
+
+    await provisionTicketDefaults(tx, organization.id);
 
     await tx.contact.createMany({
       data: [
@@ -135,10 +143,90 @@ async function main(): Promise<void> {
         },
       ],
     });
+    const [status, priority, category] = await Promise.all([
+      tx.ticketStatus.findFirstOrThrow({
+        where: { organizationId: organization.id, isDefault: true },
+        select: { id: true },
+      }),
+      tx.ticketPriority.findFirstOrThrow({
+        where: { organizationId: organization.id, isDefault: true },
+        select: { id: true },
+      }),
+      tx.ticketCategory.findFirstOrThrow({
+        where: { organizationId: organization.id, name: 'Technical' },
+        select: { id: true },
+      }),
+    ]);
+
+    const asha = await tx.contact.findFirstOrThrow({
+      where: { organizationId: organization.id, firstName: 'Asha' },
+      select: { id: true, accountId: true },
+    });
+
+    const organizationAfter = await tx.organization.update({
+      where: { id: organization.id },
+      data: { ticketSequence: { increment: 1 } },
+      select: { ticketSequence: true },
+    });
+
+    const ticket = await tx.ticket.create({
+      data: {
+        organizationId: organization.id,
+        ticketNumber: organizationAfter.ticketSequence,
+        subject: 'Cannot sign in to the customer portal',
+        description:
+          'Our operations team is seeing "invalid credentials" when signing in, even after a password reset.',
+        source: 'EMAIL',
+        contactId: asha.id,
+        accountId: asha.accountId,
+        departmentId: support.id,
+        categoryId: category.id,
+        statusId: status.id,
+        priorityId: priority.id,
+        createdById: admin.id,
+        assignedAgentId: agent.id,
+        followers: { create: [{ userId: admin.id }, { userId: agent.id }] },
+      },
+      select: { id: true },
+    });
+
+    await tx.ticketMessage.createMany({
+      data: [
+        {
+          organizationId: organization.id,
+          ticketId: ticket.id,
+          type: 'PUBLIC_REPLY',
+          direction: 'INBOUND',
+          authorContactId: asha.id,
+          channel: 'EMAIL',
+          bodyText: 'This started this morning and affects three of our users.',
+        },
+        {
+          organizationId: organization.id,
+          ticketId: ticket.id,
+          type: 'INTERNAL_COMMENT',
+          authorUserId: agent.id,
+          bodyText: 'Auth logs show repeated failures from one IP range. Checking the rate limiter.',
+        },
+      ],
+    });
   });
 
   console.log(`Seeded organization "${DEMO.organizationSlug}".`);
   console.log(`  Admin: ${DEMO.adminEmail} / ${DEMO.adminPassword}`);
+}
+
+/** Gives every organization the ticket statuses, priorities and categories it needs. */
+async function backfillTicketDefaults(): Promise<void> {
+  const organizations = await prisma.organization.findMany({
+    where: { ticketStatuses: { none: {} } },
+    select: { id: true, slug: true },
+  });
+
+  for (const organization of organizations) {
+    await prisma.$transaction((tx) => provisionTicketDefaults(tx, organization.id));
+    console.log(`Provisioned ticket defaults for "${organization.slug}".`);
+  }
 }
 
 main()

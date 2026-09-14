@@ -18,6 +18,14 @@ export const TENANT_MODELS: ReadonlySet<string> = new Set([
   'RefreshToken',
   'Notification',
   'AuditLog',
+  'TicketStatus',
+  'TicketPriority',
+  'TicketCategory',
+  'Tag',
+  'Ticket',
+  'TicketMessage',
+  'Attachment',
+  'TicketLink',
 ]);
 
 /** Models with a `deletedAt` column that should be hidden from ordinary reads. */
@@ -28,6 +36,9 @@ export const SOFT_DELETE_MODELS: ReadonlySet<string> = new Set([
   'Team',
   'Account',
   'Contact',
+  'TicketCategory',
+  'Ticket',
+  'TicketMessage',
 ]);
 
 const WHERE_OPERATIONS = new Set([

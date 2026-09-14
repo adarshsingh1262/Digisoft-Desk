@@ -35,30 +35,40 @@ enum ActorType {
 }
 
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String    @unique
-  logoUrl   String?
-  domain    String?
-  timezone  String    @default("UTC")
-  locale    String    @default("en")
-  currency  String    @default("USD")
-  settings  Json      @default("{}")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id             String    @id @default(cuid())
+  name           String
+  slug           String    @unique
+  logoUrl        String?
+  domain         String?
+  timezone       String    @default("UTC")
+  locale         String    @default("en")
+  currency       String    @default("USD")
+  settings       Json      @default("{}")
+  /// Monotonic per-organization ticket counter, bumped inside the creation transaction.
+  ticketSequence Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
-  users         User[]
-  roles         Role[]
-  departments   Department[]
-  teams         Team[]
-  contacts      Contact[]
-  accounts      Account[]
-  businessHours BusinessHours[]
-  holidays      Holiday[]
-  auditLogs     AuditLog[]
-  refreshTokens RefreshToken[]
-  notifications Notification[]
+  users            User[]
+  roles            Role[]
+  departments      Department[]
+  teams            Team[]
+  contacts         Contact[]
+  accounts         Account[]
+  businessHours    BusinessHours[]
+  holidays         Holiday[]
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+  notifications    Notification[]
+  ticketStatuses   TicketStatus[]
+  ticketPriorities TicketPriority[]
+  ticketCategories TicketCategory[]
+  tags             Tag[]
+  tickets          Ticket[]
+  ticketMessages   TicketMessage[]
+  attachments      Attachment[]
+  ticketLinks      TicketLink[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -117,14 +127,19 @@ model User {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact       Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  roles         UserRole[]
-  departments   UserDepartment[]
-  teams         TeamMember[]
-  refreshTokens RefreshToken[]
-  tokens        VerificationToken[]
-  notifications Notification[]
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact         Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  roles           UserRole[]
+  departments     UserDepartment[]
+  teams           TeamMember[]
+  refreshTokens   RefreshToken[]
+  tokens          VerificationToken[]
+  notifications   Notification[]
+  assignedTickets Ticket[]            @relation("AssignedTickets")
+  createdTickets  Ticket[]            @relation("CreatedTickets")
+  ticketMessages  TicketMessage[]
+  uploads         Attachment[]
+  following       TicketFollower[]
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -206,6 +221,7 @@ model Department {
   children     Department[]     @relation("DepartmentHierarchy")
   members      UserDepartment[]
   teams        Team[]
+  tickets      Ticket[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -277,6 +293,7 @@ model Account {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contacts     Contact[]
+  tickets      Ticket[]
 
   @@index([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -301,9 +318,11 @@ model Contact {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
   portalUser   User?
+  tickets      Ticket[]
+  messages     TicketMessage[]
 
   @@unique([organizationId, email])
   @@index([organizationId, accountId])
@@ -384,4 +403,285 @@ model AuditLog {
   @@index([organizationId, entity, entityId, createdAt])
   @@index([organizationId, createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Core helpdesk
+// ---------------------------------------------------------------------------
+
+enum TicketSource {
+  AGENT
+  PORTAL
+  WEB_FORM
+  EMAIL
+  CHAT
+  PHONE
+  API
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  TELEGRAM
+}
+
+enum MessageType {
+  /// Visible to the customer.
+  PUBLIC_REPLY
+  /// Agents only. Never serialised to a customer-facing response.
+  INTERNAL_COMMENT
+  /// Written by the system, e.g. a merge notice.
+  SYSTEM_NOTE
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum TicketLinkType {
+  RELATED
+  DUPLICATE
+  BLOCKS
+}
+
+/// Status values are rows, not an enum: organizations may add their own, and no code
+/// branches on the name — behaviour comes from the flags.
+model TicketStatus {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  systemKey      String?
+  color          String   @default("#64748b")
+  position       Int      @default(0)
+  isDefault      Boolean  @default(false)
+  /// Stops the SLA resolution clock and counts as solved in reporting.
+  isResolved     Boolean  @default(false)
+  /// Terminal: the ticket is archived from active queues.
+  isClosed       Boolean  @default(false)
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, systemKey])
+  @@index([organizationId, position])
+  @@map("ticket_statuses")
+}
+
+model TicketPriority {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  systemKey      String?
+  color          String   @default("#64748b")
+  /// Higher wins when automation or assignment rules compare two priorities.
+  weight         Int      @default(0)
+  position       Int      @default(0)
+  isDefault      Boolean  @default(false)
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, systemKey])
+  @@index([organizationId, position])
+  @@map("ticket_priorities")
+}
+
+model TicketCategory {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  parentId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       TicketCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     TicketCategory[] @relation("CategoryHierarchy")
+  tickets      Ticket[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, deletedAt])
+  @@map("ticket_categories")
+}
+
+model Tag {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  color          String   @default("#64748b")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets      TicketTag[]
+
+  @@unique([organizationId, name])
+  @@map("tags")
+}
+
+model Ticket {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  /// Sequential per organization, allocated inside the creation transaction.
+  ticketNumber       Int
+  subject            String
+  description        String
+  source             TicketSource @default(AGENT)
+  contactId          String?
+  accountId          String?
+  departmentId       String?
+  assignedAgentId    String?
+  categoryId         String?
+  statusId           String
+  priorityId         String
+  createdById        String?
+  /// Set when Phase 3 SLA policies attach; unused until then.
+  dueAt              DateTime?
+  firstResponseAt    DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  resolutionNote     String?
+  mergedIntoTicketId String?
+  customFields       Json?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact       Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  account       Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  department    Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedAgent User?           @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdBy     User?           @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: SetNull)
+  category      TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status        TicketStatus    @relation(fields: [statusId], references: [id])
+  priority      TicketPriority  @relation(fields: [priorityId], references: [id])
+  mergedInto    Ticket?         @relation("TicketMerges", fields: [mergedIntoTicketId], references: [id], onDelete: SetNull)
+  mergedTickets Ticket[]        @relation("TicketMerges")
+
+  messages    TicketMessage[]
+  attachments Attachment[]
+  tags        TicketTag[]
+  followers   TicketFollower[]
+  links       TicketLink[]     @relation("TicketLinkSource")
+  linkedFrom  TicketLink[]     @relation("TicketLinkTarget")
+
+  @@unique([organizationId, ticketNumber])
+  @@index([organizationId, statusId, createdAt])
+  @@index([organizationId, priorityId])
+  @@index([organizationId, assignedAgentId, statusId])
+  @@index([organizationId, departmentId, statusId])
+  @@index([organizationId, contactId])
+  @@index([organizationId, accountId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, dueAt])
+  @@index([organizationId, deletedAt])
+  @@map("tickets")
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+  @@index([tagId])
+  @@map("ticket_tags")
+}
+
+/// One row per reply or comment. A conversation is never a single text column.
+model TicketMessage {
+  id                String           @id @default(cuid())
+  organizationId    String
+  ticketId          String
+  type              MessageType      @default(PUBLIC_REPLY)
+  direction         MessageDirection @default(OUTBOUND)
+  /// Exactly one author is set: an agent, a contact, or neither for system notes.
+  authorUserId      String?
+  authorContactId   String?
+  bodyText          String
+  bodyHtml          String?
+  channel           TicketSource     @default(AGENT)
+  /// Provider message id, used for email threading from Phase 5.
+  externalMessageId String?
+  inReplyToId       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket        Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser    User?           @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorContact Contact?        @relation(fields: [authorContactId], references: [id], onDelete: SetNull)
+  inReplyTo     TicketMessage?  @relation("MessageThread", fields: [inReplyToId], references: [id], onDelete: SetNull)
+  replies       TicketMessage[] @relation("MessageThread")
+  attachments   Attachment[]
+
+  @@unique([organizationId, externalMessageId])
+  @@index([organizationId, ticketId, createdAt])
+  @@index([organizationId, type])
+  @@map("ticket_messages")
+}
+
+/// Only metadata lives in PostgreSQL; bytes go to object storage.
+model Attachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketId       String?
+  messageId      String?
+  fileName       String
+  fileSize       Int
+  mimeType       String
+  storageKey     String   @unique
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message      TicketMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploadedBy   User?          @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, ticketId])
+  @@index([organizationId, messageId])
+  @@map("attachments")
+}
+
+model TicketFollower {
+  ticketId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, userId])
+  @@index([userId])
+  @@map("ticket_followers")
+}
+
+model TicketLink {
+  id             String         @id @default(cuid())
+  organizationId String
+  ticketId       String
+  linkedTicketId String
+  type           TicketLinkType @default(RELATED)
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket       @relation("TicketLinkSource", fields: [ticketId], references: [id], onDelete: Cascade)
+  linkedTicket Ticket       @relation("TicketLinkTarget", fields: [linkedTicketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, linkedTicketId])
+  @@index([organizationId, linkedTicketId])
+  @@map("ticket_links")
 }
