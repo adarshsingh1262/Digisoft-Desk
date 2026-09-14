@@ -53,6 +53,16 @@ export const envSchema = z.object({
   S3_ACCESS_KEY: z.string().optional(),
   S3_SECRET_KEY: z.string().optional(),
   S3_FORCE_PATH_STYLE: bool.default(true),
+
+  /**
+   * 32 bytes, base64 or hex, used to encrypt channel credentials at rest. Required
+   * before a channel can store credentials; generate with `openssl rand -base64 32`.
+   */
+  CHANNEL_ENCRYPTION_KEY: z.string().optional(),
+  /** Public base URL providers post webhooks to; defaults to BACKEND_URL. */
+  PUBLIC_API_URL: z.string().url().optional(),
+  /** Retry budget for one outbound webhook delivery before it is marked failed. */
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;

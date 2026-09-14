@@ -40,6 +40,8 @@ export interface ChannelTicketInput {
   subject: string;
   description: string;
   source: TicketSource;
+  /** The configured channel it arrived on, when it came from one. */
+  channelId?: string | null;
   contactId?: string | null;
   accountId?: string | null;
   departmentId?: string | null;
@@ -198,6 +200,7 @@ export class TicketsService {
           subject: input.subject,
           description: input.description,
           source: input.source,
+          channelId: input.channelId ?? null,
           contactId: input.contactId ?? null,
           accountId,
           departmentId: input.departmentId ?? null,

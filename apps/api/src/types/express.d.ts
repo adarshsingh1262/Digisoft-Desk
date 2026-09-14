@@ -13,6 +13,10 @@ declare global {
       user?: AuthenticatedUser;
       /** Help center addressed by a /portal/:slug route, set by PortalContextMiddleware. */
       helpCenter?: PortalHelpCenter;
+      /** Exact request bytes, kept by Nest's rawBody option so webhook signatures verify. */
+      rawBody?: Buffer;
+      /** True when the identity came from an API key rather than a bearer token. */
+      apiKeyAuthenticated?: boolean;
     }
   }
 }

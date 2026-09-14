@@ -10,7 +10,8 @@ import { REDIS_CLIENT } from './redis/redis.module';
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody keeps the exact bytes a provider signed; webhook verification needs them.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   const config = app.get(AppConfig);
 
   app.useLogger(app.get(PinoLogger));

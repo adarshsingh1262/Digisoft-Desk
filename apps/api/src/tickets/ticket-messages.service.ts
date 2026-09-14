@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@digisoft/db';
+import type { Prisma, TicketSource } from '@digisoft/db';
 import type { AuthenticatedUser, CreateMessageInput } from '@digisoft/shared';
 import { TENANT_PRISMA } from '../prisma/prisma.module';
 import type { TenantPrismaClient } from '@digisoft/db';
@@ -12,6 +12,7 @@ import { TicketEventsService } from './ticket-events.service';
 import { MESSAGE_SELECT } from './ticket.select';
 import { canReadInternalNotes } from './ticket-visibility';
 import { EngineService } from '../engine/engine.service';
+import { ChannelOutboundService } from '../channels/channel-outbound.service';
 
 @Injectable()
 export class TicketMessagesService {
@@ -22,6 +23,7 @@ export class TicketMessagesService {
     private readonly events: TicketEventsService,
     private readonly audit: AuditService,
     private readonly engine: EngineService,
+    private readonly outbound: ChannelOutboundService,
   ) {}
 
   async list(
@@ -62,17 +64,49 @@ export class TicketMessagesService {
   }
 
   /**
-   * A reply written by the customer in the portal. It is stored as an inbound message
-   * authored by the contact — never by a user — reopens a ticket the customer had been
-   * told was resolved, and fires CUSTOMER_REPLIED so automation can react.
+   * A reply written by the customer in the portal. Ownership is checked here; the
+   * storing itself is the same path every inbound channel uses.
    */
   async addCustomerReply(
     ticketId: string,
     actor: AuthenticatedUser,
     input: { bodyText: string; attachmentIds: string[] },
   ) {
+    await this.tickets.assertVisible(actor, ticketId);
+    await this.assertAttachmentsAvailable(input.attachmentIds, ticketId);
+
+    return this.addInboundMessage({
+      organizationId: actor.organizationId,
+      ticketId,
+      contactId: actor.contactId,
+      bodyText: input.bodyText,
+      channel: 'PORTAL',
+      attachmentIds: input.attachmentIds,
+      actorId: actor.id,
+    });
+  }
+
+  /**
+   * A message from the customer, whatever brought it in: the portal, an email reply,
+   * live chat or a messaging app. It is stored as inbound and authored by the contact —
+   * never by a user — reopens a ticket the customer had been told was resolved, and
+   * fires CUSTOMER_REPLIED so automation can react.
+   */
+  async addInboundMessage(input: {
+    organizationId: string;
+    ticketId: string;
+    contactId: string | null;
+    bodyText: string;
+    bodyHtml?: string | null;
+    channel: TicketSource;
+    /** Provider id, so the same delivery can never be stored twice. */
+    externalMessageId?: string | null;
+    attachmentIds?: string[];
+    /** Set when a signed-in portal user wrote it; null for channel deliveries. */
+    actorId?: string | null;
+  }) {
     const ticket = await this.db.ticket.findFirst({
-      where: { id: ticketId },
+      where: { id: input.ticketId },
       select: {
         id: true,
         ticketNumber: true,
@@ -86,9 +120,8 @@ export class TicketMessagesService {
     if (!ticket) {
       throw AppError.notFound('ticket');
     }
-    await this.tickets.assertVisible(actor, ticketId);
-    await this.assertAttachmentsAvailable(input.attachmentIds, ticketId);
 
+    const attachmentIds = input.attachmentIds ?? [];
     const wasClosed = ticket.status.isResolved || ticket.status.isClosed;
     const reopenStatus = wasClosed
       ? await this.db.ticketStatus.findFirst({
@@ -101,26 +134,28 @@ export class TicketMessagesService {
     const message = await this.db.$transaction(async (tx) => {
       const created = await tx.ticketMessage.create({
         data: {
-          organizationId: actor.organizationId,
-          ticketId,
+          organizationId: input.organizationId,
+          ticketId: input.ticketId,
           type: 'PUBLIC_REPLY',
           direction: 'INBOUND',
-          authorContactId: actor.contactId,
+          authorContactId: input.contactId,
           bodyText: input.bodyText,
-          channel: 'PORTAL',
+          bodyHtml: input.bodyHtml ?? null,
+          channel: input.channel,
+          externalMessageId: input.externalMessageId ?? null,
         },
         select: MESSAGE_SELECT,
       });
 
-      if (input.attachmentIds.length > 0) {
+      if (attachmentIds.length > 0) {
         await tx.attachment.updateMany({
-          where: { id: { in: input.attachmentIds }, ticketId },
+          where: { id: { in: attachmentIds }, ticketId: input.ticketId },
           data: { messageId: created.id },
         });
       }
 
       await tx.ticket.update({
-        where: { id: ticketId },
+        where: { id: input.ticketId },
         data: reopenStatus
           ? { statusId: reopenStatus.id, resolvedAt: null, closedAt: null, updatedAt: new Date() }
           : { updatedAt: new Date() },
@@ -130,29 +165,34 @@ export class TicketMessagesService {
     });
 
     await this.audit.record({
-      organizationId: actor.organizationId,
-      actorId: actor.id,
+      organizationId: input.organizationId,
+      actorId: input.actorId ?? null,
+      actorType: input.actorId ? 'USER' : 'SYSTEM',
       action: 'ticket.customer_replied',
       entity: 'Ticket',
-      entityId: ticketId,
-      newValue: { messageId: message.id, reopened: reopenStatus !== null },
+      entityId: input.ticketId,
+      newValue: {
+        messageId: message.id,
+        channel: input.channel,
+        reopened: reopenStatus !== null,
+      },
     });
 
-    this.events.messageCreated(actor.organizationId, ticket, {
+    this.events.messageCreated(input.organizationId, ticket, {
       id: message.id,
       type: 'PUBLIC_REPLY',
     });
-    await this.notifyCustomerReply(actor.organizationId, ticket);
+    await this.notifyCustomerReply(input.organizationId, ticket);
 
     if (reopenStatus) {
-      await this.engine.syncSlaPause(actor.organizationId, ticketId, false);
-      await this.engine.trigger(actor.organizationId, ticketId, 'STATUS_CHANGED', {
+      await this.engine.syncSlaPause(input.organizationId, input.ticketId, false);
+      await this.engine.trigger(input.organizationId, input.ticketId, 'STATUS_CHANGED', {
         from: 'resolved',
         to: reopenStatus.name,
         reason: 'customer_reply',
       });
     }
-    await this.engine.trigger(actor.organizationId, ticketId, 'CUSTOMER_REPLIED');
+    await this.engine.trigger(input.organizationId, input.ticketId, 'CUSTOMER_REPLIED');
 
     return message;
   }
@@ -227,6 +267,8 @@ export class TicketMessagesService {
     this.events.messageCreated(actor.organizationId, ticket, { id: message.id, type });
     await this.notifyFollowers(actor, ticket, type);
     if (type === 'PUBLIC_REPLY') {
+      // A ticket that arrived on a channel is answered on that channel.
+      await this.outbound.deliverReply(actor.organizationId, ticketId, message.id);
       await this.engine.trigger(actor.organizationId, ticketId, 'AGENT_REPLIED');
     }
 
