@@ -11,6 +11,7 @@ const baseUser: AuthenticatedUser = {
   roles: ['AGENT'],
   permissions: [PERMISSIONS.TICKET_READ],
   departmentIds: [],
+  contactId: null,
 };
 
 describe('ticketVisibilityFilter', () => {
@@ -37,6 +38,26 @@ describe('ticketVisibilityFilter', () => {
     const filter = ticketVisibilityFilter({ ...baseUser, departmentIds: ['dept-1', 'dept-2'] });
     expect(filter.OR).toContainEqual({ departmentId: { in: ['dept-1', 'dept-2'] } });
     expect(filter.OR).toHaveLength(4);
+  });
+});
+
+describe('portal visibility', () => {
+  it('limits a portal user to their own requests, whatever their role grants', () => {
+    expect(
+      ticketVisibilityFilter({
+        ...baseUser,
+        type: 'CUSTOMER',
+        contactId: 'contact-9',
+        permissions: [PERMISSIONS.TICKET_READ, PERMISSIONS.TICKET_READ_ALL],
+        departmentIds: ['dept-1'],
+      }),
+    ).toEqual({ OR: [{ createdById: 'user-1' }, { contactId: 'contact-9' }] });
+  });
+
+  it('falls back to authorship when the portal user has no contact record', () => {
+    expect(ticketVisibilityFilter({ ...baseUser, type: 'CUSTOMER' })).toEqual({
+      OR: [{ createdById: 'user-1' }],
+    });
   });
 });
 

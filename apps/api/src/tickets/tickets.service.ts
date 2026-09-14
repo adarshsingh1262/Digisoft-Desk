@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@digisoft/db';
+import type { Prisma, TicketSource } from '@digisoft/db';
 import type {
   AssignTicketInput,
   AuthenticatedUser,
@@ -33,6 +33,26 @@ const SORTABLE = ['createdAt', 'updatedAt', 'ticketNumber', 'subject', 'dueAt'] 
  * they pick the Open view.
  */
 const OPEN_STATUS: Prisma.TicketWhereInput = { status: { isResolved: false, isClosed: false } };
+
+/** A ticket as any channel hands it over, after that channel resolved its references. */
+export interface ChannelTicketInput {
+  organizationId: string;
+  subject: string;
+  description: string;
+  source: TicketSource;
+  contactId?: string | null;
+  accountId?: string | null;
+  departmentId?: string | null;
+  assignedAgentId?: string | null;
+  categoryId?: string | null;
+  statusId?: string | null;
+  priorityId?: string | null;
+  customFields?: Record<string, unknown> | null;
+  tagIds?: string[];
+  /** Null for an anonymous web form submission. */
+  createdById?: string | null;
+  followerUserIds?: string[];
+}
 
 @Injectable()
 export class TicketsService {
@@ -128,23 +148,52 @@ export class TicketsService {
 
   async create(actor: AuthenticatedUser, input: CreateTicketInput) {
     await this.assertReferencesExist(input);
+    return this.createTicket({
+      organizationId: actor.organizationId,
+      subject: input.subject,
+      description: input.description,
+      source: input.source,
+      contactId: input.contactId ?? null,
+      accountId: input.accountId ?? null,
+      departmentId: input.departmentId ?? null,
+      assignedAgentId: input.assignedAgentId ?? null,
+      categoryId: input.categoryId ?? null,
+      statusId: input.statusId ?? null,
+      priorityId: input.priorityId ?? null,
+      customFields: input.customFields ?? null,
+      tagIds: input.tagIds,
+      createdById: actor.id,
+      followerUserIds: [actor.id],
+    });
+  }
 
+  /**
+   * The one creation path every channel goes through — the agent workspace, the
+   * customer portal, a web form, and the inbound channels that come later. It owns
+   * the ticket number, the audit entry, assignment routing, the SLA clock and the
+   * TICKET_CREATED trigger, so no channel can accidentally skip one of them.
+   *
+   * References are the caller's responsibility: the agent path validates the ids it
+   * was handed, the portal path only passes ids it resolved itself.
+   */
+  async createTicket(input: ChannelTicketInput) {
     const statusId = input.statusId ?? (await this.config.defaultStatusId());
     const priorityId = input.priorityId ?? (await this.config.defaultPriorityId());
     const accountId = input.accountId ?? (await this.accountIdForContact(input.contactId));
+    const followerUserIds = [...new Set(input.followerUserIds ?? [])];
 
     const created = await this.db.$transaction(async (tx) => {
       // The counter lives on the organization row, so the increment is serialised by
       // the row lock and two concurrent creates cannot share a number.
       const organization = await tx.organization.update({
-        where: { id: actor.organizationId },
+        where: { id: input.organizationId },
         data: { ticketSequence: { increment: 1 } },
         select: { ticketSequence: true },
       });
 
       return tx.ticket.create({
         data: {
-          organizationId: actor.organizationId,
+          organizationId: input.organizationId,
           ticketNumber: organization.ticketSequence,
           subject: input.subject,
           description: input.description,
@@ -156,38 +205,51 @@ export class TicketsService {
           categoryId: input.categoryId ?? null,
           statusId,
           priorityId,
-          createdById: actor.id,
+          createdById: input.createdById ?? null,
           customFields: (input.customFields as Prisma.InputJsonValue) ?? undefined,
-          tags: { create: input.tagIds.map((tagId) => ({ tagId })) },
-          followers: { create: { userId: actor.id } },
+          tags: { create: (input.tagIds ?? []).map((tagId) => ({ tagId })) },
+          followers: { create: followerUserIds.map((userId) => ({ userId })) },
         },
         select: TICKET_DETAIL_SELECT,
       });
     });
 
     await this.audit.record({
-      organizationId: actor.organizationId,
-      actorId: actor.id,
+      organizationId: input.organizationId,
+      actorId: input.createdById ?? null,
+      actorType: input.createdById ? 'USER' : 'SYSTEM',
       action: 'ticket.created',
       entity: 'Ticket',
       entityId: created.id,
-      newValue: { ticketNumber: created.ticketNumber, subject: created.subject },
+      newValue: {
+        ticketNumber: created.ticketNumber,
+        subject: created.subject,
+        source: created.source,
+      },
     });
 
-    // Assignment rules only route what the agent left unassigned; SLA always applies.
+    // Assignment rules only route what the caller left unassigned; SLA always applies.
     const routed =
       created.assignedAgent || created.department
         ? null
-        : await this.engine.routeNewTicket(actor.organizationId, created.id);
-    await this.engine.applySlaToTicket(actor.organizationId, created.id);
+        : await this.engine.routeNewTicket(input.organizationId, created.id);
+    await this.engine.applySlaToTicket(input.organizationId, created.id);
 
-    const ticket = await this.db.ticket.findUniqueOrThrow({ where: { id: created.id }, select: TICKET_DETAIL_SELECT });
-    this.events.ticketCreated(actor, ticket);
+    const ticket = await this.db.ticket.findUniqueOrThrow({
+      where: { id: created.id },
+      select: TICKET_DETAIL_SELECT,
+    });
+    this.events.ticketCreated({ organizationId: input.organizationId }, ticket);
 
-    if (ticket.assignedAgent && ticket.assignedAgent.id !== actor.id) {
-      await this.notifyAssignment(actor, ticket.id, ticket.assignedAgent.id, ticket);
+    if (ticket.assignedAgent && ticket.assignedAgent.id !== input.createdById) {
+      await this.notifyAssignment(
+        input.organizationId,
+        ticket.id,
+        ticket.assignedAgent.id,
+        ticket,
+      );
     }
-    await this.engine.trigger(actor.organizationId, ticket.id, 'TICKET_CREATED', {
+    await this.engine.trigger(input.organizationId, ticket.id, 'TICKET_CREATED', {
       routedBy: routed?.ruleName ?? null,
     });
     return ticket;
@@ -258,7 +320,7 @@ export class TicketsService {
 
     const newAssignee = ticket.assignedAgent?.id;
     if (newAssignee && newAssignee !== before.assignedAgent?.id && newAssignee !== actor.id) {
-      await this.notifyAssignment(actor, id, newAssignee, ticket);
+      await this.notifyAssignment(actor.organizationId, id, newAssignee, ticket);
     }
     await this.engine.trigger(actor.organizationId, id, 'TICKET_ASSIGNED');
     return ticket;
@@ -630,12 +692,12 @@ export class TicketsService {
   }
 
   private async notifyAssignment(
-    actor: AuthenticatedUser,
+    organizationId: string,
     ticketId: string,
     assigneeId: string,
     ticket: { ticketNumber: number; subject: string },
   ): Promise<void> {
-    await this.notifications.create(actor.organizationId, {
+    await this.notifications.create(organizationId, {
       userId: assigneeId,
       type: 'ticket.assigned',
       title: `Ticket #${ticket.ticketNumber} assigned to you`,

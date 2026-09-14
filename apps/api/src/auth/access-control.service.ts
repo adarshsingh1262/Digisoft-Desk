@@ -46,6 +46,7 @@ export class AccessControlService {
         firstName: true,
         lastName: true,
         type: true,
+        contactId: true,
         departments: { select: { departmentId: true } },
         roles: {
           select: {
@@ -84,6 +85,7 @@ export class AccessControlService {
       roles,
       permissions: [...permissions],
       departmentIds: user.departments.map((link) => link.departmentId),
+      contactId: user.contactId,
     };
 
     await this.redis.set(key, JSON.stringify(resolved), 'EX', CACHE_TTL_SECONDS);

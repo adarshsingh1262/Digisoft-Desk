@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { AuthenticatedUser } from '@digisoft/shared';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export const TICKET_EVENTS = {
@@ -25,19 +24,19 @@ interface TicketAudience {
 export class TicketEventsService {
   constructor(private readonly realtime: RealtimeGateway) {}
 
-  ticketCreated(actor: AuthenticatedUser, ticket: TicketAudience & object): void {
+  ticketCreated(actor: { organizationId: string }, ticket: TicketAudience & object): void {
     this.emit(actor.organizationId, ticket, TICKET_EVENTS.CREATED, ticket);
   }
 
-  ticketUpdated(actor: AuthenticatedUser, ticket: TicketAudience & object): void {
+  ticketUpdated(actor: { organizationId: string }, ticket: TicketAudience & object): void {
     this.emit(actor.organizationId, ticket, TICKET_EVENTS.UPDATED, ticket);
   }
 
-  ticketAssigned(actor: AuthenticatedUser, ticket: TicketAudience & object): void {
+  ticketAssigned(actor: { organizationId: string }, ticket: TicketAudience & object): void {
     this.emit(actor.organizationId, ticket, TICKET_EVENTS.ASSIGNED, ticket);
   }
 
-  ticketStatusChanged(actor: AuthenticatedUser, ticket: TicketAudience & object): void {
+  ticketStatusChanged(actor: { organizationId: string }, ticket: TicketAudience & object): void {
     this.emit(actor.organizationId, ticket, TICKET_EVENTS.STATUS_CHANGED, ticket);
   }
 

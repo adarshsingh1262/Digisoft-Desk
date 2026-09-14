@@ -18,6 +18,7 @@ import { AccessControlService } from './access-control.service';
 import { MailerService } from '../email/mailer.service';
 import {
   DEFAULT_BUSINESS_HOURS,
+  provisionHelpCenter,
   provisionSlaDefaults,
   provisionSystemRoles,
   provisionTicketDefaults,
@@ -102,6 +103,10 @@ export class AuthService {
       // the moment registration finishes.
       await provisionTicketDefaults(tx, organization.id);
       await provisionSlaDefaults(tx, organization.id);
+      await provisionHelpCenter(tx, organization.id, {
+        name: input.organizationName,
+        slug: input.organizationSlug,
+      });
 
       const user = await tx.user.create({
         data: {
@@ -223,7 +228,11 @@ export class AuthService {
     });
   }
 
-  async forgotPassword(input: ForgotPasswordInput): Promise<void> {
+  /**
+   * `resetPath` lets the portal point a customer at its own reset page instead of the
+   * agent one; everything else about the flow is identical.
+   */
+  async forgotPassword(input: ForgotPasswordInput, resetPath = '/reset-password'): Promise<void> {
     const user = await this.prisma.user.findFirst({
       where: {
         email: input.email,
@@ -252,7 +261,7 @@ export class AuthService {
     await this.mailer.send(user.organizationId, user.email, {
       kind: 'reset-password',
       firstName: user.firstName,
-      url: `${this.mailer.frontendUrl}/reset-password?token=${raw}`,
+      url: `${this.mailer.frontendUrl}${resetPath}?token=${raw}`,
       expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
     });
   }
@@ -300,7 +309,7 @@ export class AuthService {
     ]);
   }
 
-  async sendEmailVerification(userId: string): Promise<void> {
+  async sendEmailVerification(userId: string, verifyPath = '/verify-email'): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -328,7 +337,7 @@ export class AuthService {
     await this.mailer.send(user.organizationId, user.email, {
       kind: 'verify-email',
       firstName: user.firstName,
-      url: `${this.mailer.frontendUrl}/verify-email?token=${raw}`,
+      url: `${this.mailer.frontendUrl}${verifyPath}?token=${raw}`,
     });
   }
 
@@ -366,7 +375,8 @@ export class AuthService {
     });
   }
 
-  private async createSession(
+  /** Issues the access token and the rotating refresh token for an existing user. */
+  async createSession(
     userId: string,
     organizationId: string,
     meta: RequestMeta,

@@ -22,6 +22,10 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { EngineModule } from './engine/engine.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { OperationsModule } from './operations/operations.module';
+import { KbModule } from './kb/kb.module';
+import { HelpCenterModule } from './help-center/help-center.module';
+import { CommunityModule } from './community/community.module';
+import { PortalModule } from './portal/portal.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
@@ -95,6 +99,10 @@ import { PermissionCatalogueService } from './bootstrap/permission-catalogue.ser
     AttachmentsModule,
     ActivitiesModule,
     OperationsModule,
+    KbModule,
+    HelpCenterModule,
+    CommunityModule,
+    PortalModule,
     NotificationsModule,
     HealthModule,
   ],
