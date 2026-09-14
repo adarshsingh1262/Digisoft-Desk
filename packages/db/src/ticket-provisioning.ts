@@ -11,8 +11,8 @@ export const DEFAULT_TICKET_STATUSES = [
   { systemKey: 'NEW', name: 'New', color: '#2563eb', position: 0, isDefault: true },
   { systemKey: 'OPEN', name: 'Open', color: '#0ea5e9', position: 1 },
   { systemKey: 'IN_PROGRESS', name: 'In Progress', color: '#8b5cf6', position: 2 },
-  { systemKey: 'ON_HOLD', name: 'On Hold', color: '#f59e0b', position: 3 },
-  { systemKey: 'PENDING', name: 'Pending', color: '#eab308', position: 4 },
+  { systemKey: 'ON_HOLD', name: 'On Hold', color: '#f59e0b', position: 3, pausesSla: true },
+  { systemKey: 'PENDING', name: 'Pending', color: '#eab308', position: 4, pausesSla: true },
   { systemKey: 'RESOLVED', name: 'Resolved', color: '#10b981', position: 5, isResolved: true },
   {
     systemKey: 'CLOSED',
@@ -50,6 +50,7 @@ export async function provisionTicketDefaults(db: Db, organizationId: string): P
       isDefault: 'isDefault' in status ? status.isDefault : false,
       isResolved: 'isResolved' in status ? status.isResolved : false,
       isClosed: 'isClosed' in status ? status.isClosed : false,
+      pausesSla: 'pausesSla' in status ? status.pausesSla : false,
       isSystem: true,
     })),
   });
@@ -73,5 +74,57 @@ export async function provisionTicketDefaults(db: Db, organizationId: string): P
       name: category.name,
       description: category.description,
     })),
+  });
+}
+
+/**
+ * A starting SLA so the clock runs from day one. Targets follow the spec's example
+ * (urgent 15m/4h, high 30m/8h) and count business hours on the default calendar.
+ */
+export async function provisionSlaDefaults(db: Db, organizationId: string): Promise<void> {
+  const existing = await db.slaPolicy.count({ where: { organizationId } });
+  if (existing > 0) return;
+
+  const priorities = await db.ticketPriority.findMany({
+    where: { organizationId },
+    select: { id: true, systemKey: true },
+  });
+  const byKey = new Map(priorities.map((priority) => [priority.systemKey, priority.id]));
+  const calendar = await db.businessHours.findFirst({
+    where: { organizationId, isDefault: true },
+    select: { id: true },
+  });
+
+  const targets = [
+    { key: 'URGENT', firstResponseMinutes: 15, resolutionMinutes: 4 * 60 },
+    { key: 'HIGH', firstResponseMinutes: 30, resolutionMinutes: 8 * 60 },
+    { key: 'MEDIUM', firstResponseMinutes: 2 * 60, resolutionMinutes: 24 * 60 },
+    { key: 'LOW', firstResponseMinutes: 8 * 60, resolutionMinutes: 3 * 24 * 60 },
+  ];
+
+  await db.slaPolicy.create({
+    data: {
+      organizationId,
+      name: 'Standard support',
+      description: 'Default targets applied to every ticket that no other policy claims.',
+      isDefault: true,
+      conditions: { all: [], any: [] },
+      businessHoursId: calendar?.id ?? null,
+      warningMinutesBefore: 30,
+      targets: {
+        create: [
+          ...targets
+            .filter((target) => byKey.has(target.key))
+            .map((target) => ({
+              priorityId: byKey.get(target.key) ?? null,
+              firstResponseMinutes: target.firstResponseMinutes,
+              resolutionMinutes: target.resolutionMinutes,
+              useBusinessHours: true,
+            })),
+          // Fallback for any priority the organization adds later.
+          { priorityId: null, firstResponseMinutes: 4 * 60, resolutionMinutes: 2 * 24 * 60, useBusinessHours: true },
+        ],
+      },
+    },
   });
 }

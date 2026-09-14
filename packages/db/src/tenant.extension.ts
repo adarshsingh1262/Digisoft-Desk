@@ -26,6 +26,12 @@ export const TENANT_MODELS: ReadonlySet<string> = new Set([
   'TicketMessage',
   'Attachment',
   'TicketLink',
+  'Activity',
+  'AssignmentRule',
+  'AutomationRule',
+  'AutomationRun',
+  'SlaPolicy',
+  'Blueprint',
 ]);
 
 /** Models with a `deletedAt` column that should be hidden from ordinary reads. */
@@ -39,6 +45,7 @@ export const SOFT_DELETE_MODELS: ReadonlySet<string> = new Set([
   'TicketCategory',
   'Ticket',
   'TicketMessage',
+  'Activity',
 ]);
 
 const WHERE_OPERATIONS = new Set([

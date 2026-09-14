@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { SYSTEM_ROLES } from '@digisoft/shared';
 import { provisionSystemRoles, syncPermissionCatalogue } from '../src/role-provisioning';
-import { provisionTicketDefaults } from '../src/ticket-provisioning';
+import { provisionSlaDefaults, provisionTicketDefaults } from '../src/ticket-provisioning';
 
 const prisma = new PrismaClient();
 
@@ -121,6 +121,7 @@ async function main(): Promise<void> {
     });
 
     await provisionTicketDefaults(tx, organization.id);
+    await provisionSlaDefaults(tx, organization.id);
 
     await tx.contact.createMany({
       data: [
@@ -226,6 +227,23 @@ async function backfillTicketDefaults(): Promise<void> {
   for (const organization of organizations) {
     await prisma.$transaction((tx) => provisionTicketDefaults(tx, organization.id));
     console.log(`Provisioned ticket defaults for "${organization.slug}".`);
+  }
+
+  // Statuses created before the flag existed default to not pausing; the two system
+  // statuses that mean "waiting on someone else" should.
+  const pausing = await prisma.ticketStatus.updateMany({
+    where: { isSystem: true, systemKey: { in: ['ON_HOLD', 'PENDING'] }, pausesSla: false },
+    data: { pausesSla: true },
+  });
+  if (pausing.count > 0) console.log(`Marked ${pausing.count} system status(es) as pausing the SLA clock.`);
+
+  const withoutSla = await prisma.organization.findMany({
+    where: { slaPolicies: { none: {} } },
+    select: { id: true, slug: true },
+  });
+  for (const organization of withoutSla) {
+    await prisma.$transaction((tx) => provisionSlaDefaults(tx, organization.id));
+    console.log(`Provisioned the default SLA policy for "${organization.slug}".`);
   }
 }
 

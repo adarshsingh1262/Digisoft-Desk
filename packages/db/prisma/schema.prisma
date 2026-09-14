@@ -69,6 +69,12 @@ model Organization {
   ticketMessages   TicketMessage[]
   attachments      Attachment[]
   ticketLinks      TicketLink[]
+  activities       Activity[]
+  assignmentRules  AssignmentRule[]
+  automationRules  AutomationRule[]
+  automationRuns   AutomationRun[]
+  slaPolicies      SlaPolicy[]
+  blueprints       Blueprint[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -87,6 +93,7 @@ model BusinessHours {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   holidays     Holiday[]
+  slaPolicies  SlaPolicy[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -127,19 +134,22 @@ model User {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact         Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  roles           UserRole[]
-  departments     UserDepartment[]
-  teams           TeamMember[]
-  refreshTokens   RefreshToken[]
-  tokens          VerificationToken[]
-  notifications   Notification[]
-  assignedTickets Ticket[]            @relation("AssignedTickets")
-  createdTickets  Ticket[]            @relation("CreatedTickets")
-  ticketMessages  TicketMessage[]
-  uploads         Attachment[]
-  following       TicketFollower[]
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact            Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  roles              UserRole[]
+  departments        UserDepartment[]
+  teams              TeamMember[]
+  refreshTokens      RefreshToken[]
+  tokens             VerificationToken[]
+  notifications      Notification[]
+  assignedTickets    Ticket[]            @relation("AssignedTickets")
+  createdTickets     Ticket[]            @relation("CreatedTickets")
+  ticketMessages     TicketMessage[]
+  uploads            Attachment[]
+  following          TicketFollower[]
+  assignedActivities Activity[]          @relation("AssignedActivities")
+  createdActivities  Activity[]          @relation("CreatedActivities")
+  assignmentRules    AssignmentRule[]
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -216,12 +226,13 @@ model Department {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children     Department[]     @relation("DepartmentHierarchy")
-  members      UserDepartment[]
-  teams        Team[]
-  tickets      Ticket[]
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent          Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Department[]     @relation("DepartmentHierarchy")
+  members         UserDepartment[]
+  teams           Team[]
+  tickets         Ticket[]
+  assignmentRules AssignmentRule[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -250,9 +261,10 @@ model Team {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  members      TeamMember[]
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department      Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  members         TeamMember[]
+  assignmentRules AssignmentRule[]
 
   @@unique([organizationId, name])
   @@index([organizationId, departmentId])
@@ -294,6 +306,7 @@ model Account {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contacts     Contact[]
   tickets      Ticket[]
+  activities   Activity[]
 
   @@index([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -323,6 +336,7 @@ model Contact {
   portalUser   User?
   tickets      Ticket[]
   messages     TicketMessage[]
+  activities   Activity[]
 
   @@unique([organizationId, email])
   @@index([organizationId, accountId])
@@ -457,12 +471,16 @@ model TicketStatus {
   isResolved     Boolean  @default(false)
   /// Terminal: the ticket is archived from active queues.
   isClosed       Boolean  @default(false)
+  /// Stops the SLA clock while the ticket waits on someone else (on hold, pending).
+  pausesSla      Boolean  @default(false)
   isSystem       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tickets      Ticket[]
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets         Ticket[]
+  transitionsFrom BlueprintTransition[] @relation("TransitionFrom")
+  transitionsTo   BlueprintTransition[] @relation("TransitionTo")
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
@@ -486,6 +504,7 @@ model TicketPriority {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tickets      Ticket[]
+  slaTargets   SlaTarget[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
@@ -528,44 +547,59 @@ model Tag {
 }
 
 model Ticket {
-  id                 String       @id @default(cuid())
-  organizationId     String
+  id                        String       @id @default(cuid())
+  organizationId            String
   /// Sequential per organization, allocated inside the creation transaction.
-  ticketNumber       Int
-  subject            String
-  description        String
-  source             TicketSource @default(AGENT)
-  contactId          String?
-  accountId          String?
-  departmentId       String?
-  assignedAgentId    String?
-  categoryId         String?
-  statusId           String
-  priorityId         String
-  createdById        String?
-  /// Set when Phase 3 SLA policies attach; unused until then.
-  dueAt              DateTime?
-  firstResponseAt    DateTime?
-  resolvedAt         DateTime?
-  closedAt           DateTime?
-  resolutionNote     String?
-  mergedIntoTicketId String?
-  customFields       Json?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  deletedAt          DateTime?
+  ticketNumber              Int
+  subject                   String
+  description               String
+  source                    TicketSource @default(AGENT)
+  contactId                 String?
+  accountId                 String?
+  departmentId              String?
+  assignedAgentId           String?
+  categoryId                String?
+  statusId                  String
+  priorityId                String
+  createdById               String?
+  /// Mirrors resolutionDueAt so queue sorting needs one column.
+  dueAt                     DateTime?
+  slaPolicyId               String?
+  firstResponseDueAt        DateTime?
+  resolutionDueAt           DateTime?
+  firstResponseWarnedAt     DateTime?
+  resolutionWarnedAt        DateTime?
+  firstResponseBreachedAt   DateTime?
+  resolutionBreachedAt      DateTime?
+  /// Set while the ticket sits in a status that pauses the SLA clock.
+  slaPausedAt               DateTime?
+  /// Business minutes still available when the clock was paused.
+  firstResponseRemainingMin Int?
+  resolutionRemainingMin    Int?
+  firstResponseAt           DateTime?
+  resolvedAt                DateTime?
+  closedAt                  DateTime?
+  resolutionNote            String?
+  mergedIntoTicketId        String?
+  customFields              Json?
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  deletedAt                 DateTime?
 
-  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact       Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  account       Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  department    Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  assignedAgent User?           @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  createdBy     User?           @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: SetNull)
-  category      TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  status        TicketStatus    @relation(fields: [statusId], references: [id])
-  priority      TicketPriority  @relation(fields: [priorityId], references: [id])
-  mergedInto    Ticket?         @relation("TicketMerges", fields: [mergedIntoTicketId], references: [id], onDelete: SetNull)
-  mergedTickets Ticket[]        @relation("TicketMerges")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedAgent  User?           @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdBy      User?           @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: SetNull)
+  category       TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status         TicketStatus    @relation(fields: [statusId], references: [id])
+  priority       TicketPriority  @relation(fields: [priorityId], references: [id])
+  mergedInto     Ticket?         @relation("TicketMerges", fields: [mergedIntoTicketId], references: [id], onDelete: SetNull)
+  mergedTickets  Ticket[]        @relation("TicketMerges")
+  slaPolicy      SlaPolicy?      @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
+  activities     Activity[]
+  automationRuns AutomationRun[]
 
   messages    TicketMessage[]
   attachments Attachment[]
@@ -583,6 +617,8 @@ model Ticket {
   @@index([organizationId, accountId])
   @@index([organizationId, createdAt])
   @@index([organizationId, dueAt])
+  @@index([organizationId, firstResponseDueAt])
+  @@index([organizationId, resolutionDueAt])
   @@index([organizationId, deletedAt])
   @@map("tickets")
 }
@@ -684,4 +720,249 @@ model TicketLink {
   @@unique([ticketId, linkedTicketId])
   @@index([organizationId, linkedTicketId])
   @@map("ticket_links")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Support operations
+// ---------------------------------------------------------------------------
+
+enum ActivityType {
+  TASK
+  CALL
+  EVENT
+}
+
+enum ActivityStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum AssignmentStrategy {
+  /// Always the configured agent.
+  SPECIFIC_AGENT
+  /// Route to a department only; an agent picks it up.
+  DEPARTMENT
+  /// Rotate through the department's (or team's) active agents.
+  ROUND_ROBIN
+  /// The active agent with the fewest open tickets.
+  LEAST_LOADED
+}
+
+enum AutomationTrigger {
+  TICKET_CREATED
+  TICKET_UPDATED
+  TICKET_ASSIGNED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  CUSTOMER_REPLIED
+  AGENT_REPLIED
+  SLA_WARNING
+  SLA_BREACHED
+}
+
+/// Tasks, calls and events — only where they relate to support work.
+model Activity {
+  id                  String         @id @default(cuid())
+  organizationId      String
+  type                ActivityType
+  status              ActivityStatus @default(OPEN)
+  subject             String
+  description         String?
+  dueAt               DateTime?
+  startAt             DateTime?
+  endAt               DateTime?
+  completedAt         DateTime?
+  callDirection       CallDirection?
+  callDurationSeconds Int?
+  callOutcome         String?
+  location            String?
+  ticketId            String?
+  contactId           String?
+  accountId           String?
+  assignedToId        String?
+  createdById         String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  assignedTo   User?        @relation("AssignedActivities", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("CreatedActivities", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, type, status, dueAt])
+  @@index([organizationId, ticketId])
+  @@index([organizationId, contactId])
+  @@index([organizationId, accountId])
+  @@index([organizationId, assignedToId, status])
+  @@index([organizationId, deletedAt])
+  @@map("activities")
+}
+
+/// Ordered routing rules evaluated when a ticket is created; the first match wins.
+model AssignmentRule {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  name               String
+  isActive           Boolean            @default(true)
+  position           Int                @default(0)
+  /// Condition tree in the shared rule DSL.
+  conditions         Json
+  strategy           AssignmentStrategy
+  departmentId       String?
+  teamId             String?
+  agentId            String?
+  /// Round-robin cursor: the agent who received the previous ticket.
+  lastAssignedUserId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  agent        User?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, isActive, position])
+  @@map("assignment_rules")
+}
+
+/// Trigger + conditions + actions. Escalations are rules on the SLA triggers.
+model AutomationRule {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean           @default(true)
+  position       Int               @default(0)
+  trigger        AutomationTrigger
+  conditions     Json
+  actions        Json
+  runCount       Int               @default(0)
+  lastRunAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         AutomationRun[]
+
+  @@index([organizationId, trigger, isActive, position])
+  @@map("automation_rules")
+}
+
+/// One row per rule evaluation, so an administrator can see why a rule did or did not fire.
+model AutomationRun {
+  id             String            @id @default(cuid())
+  organizationId String
+  ruleId         String
+  ticketId       String?
+  trigger        AutomationTrigger
+  matched        Boolean
+  actionsApplied Json?
+  error          String?
+  createdAt      DateTime          @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule         AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ticket       Ticket?        @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, ruleId, createdAt])
+  @@index([organizationId, ticketId, createdAt])
+  @@map("automation_runs")
+}
+
+model SlaPolicy {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  name                 String
+  description          String?
+  isActive             Boolean  @default(true)
+  isDefault            Boolean  @default(false)
+  position             Int      @default(0)
+  /// Which tickets the policy applies to; the first matching active policy wins.
+  conditions           Json
+  businessHoursId      String?
+  /// Fire the SLA_WARNING trigger this many minutes before a target is due.
+  warningMinutesBefore Int      @default(30)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  businessHours BusinessHours? @relation(fields: [businessHoursId], references: [id], onDelete: SetNull)
+  targets       SlaTarget[]
+  tickets       Ticket[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive, position])
+  @@map("sla_policies")
+}
+
+/// Per-priority targets. A row with no priority is the fallback for the policy.
+model SlaTarget {
+  id                   String  @id @default(cuid())
+  slaPolicyId          String
+  priorityId           String?
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  /// Count only business hours (from the policy's calendar) or the wall clock.
+  useBusinessHours     Boolean @default(true)
+
+  policy   SlaPolicy       @relation(fields: [slaPolicyId], references: [id], onDelete: Cascade)
+  priority TicketPriority? @relation(fields: [priorityId], references: [id], onDelete: Cascade)
+
+  @@unique([slaPolicyId, priorityId])
+  @@map("sla_targets")
+}
+
+/// A configurable state machine applied to matching tickets.
+model Blueprint {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  position       Int      @default(0)
+  /// Which tickets the blueprint governs; the first matching active blueprint wins.
+  conditions     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transitions  BlueprintTransition[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive, position])
+  @@map("blueprints")
+}
+
+model BlueprintTransition {
+  id             String   @id @default(cuid())
+  blueprintId    String
+  name           String
+  /// Null means the transition is allowed from any status.
+  fromStatusId   String?
+  toStatusId     String
+  /// Ticket fields that must be set before the transition is allowed.
+  requiredFields Json     @default("[]")
+  /// Role ids permitted to make the transition; empty means anyone with ticket.update.
+  allowedRoleIds Json     @default("[]")
+  conditions     Json     @default("{}")
+  /// Actions applied after a successful transition.
+  actions        Json     @default("[]")
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  blueprint  Blueprint     @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  fromStatus TicketStatus? @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  toStatus   TicketStatus  @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade)
+
+  @@index([blueprintId, fromStatusId])
+  @@map("blueprint_transitions")
 }
