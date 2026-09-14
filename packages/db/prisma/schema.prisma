@@ -1,0 +1,387 @@
+// Digisoft360 Help Desk — Phase 1 (Foundation) schema.
+// Every tenant-owned model carries `organizationId`; isolation is enforced by the
+// Prisma client extension in src/prisma/tenant.extension.ts, not by callers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  AGENT
+  CUSTOMER
+}
+
+enum ContactStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  INVITE
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  AUTOMATION
+}
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  logoUrl   String?
+  domain    String?
+  timezone  String    @default("UTC")
+  locale    String    @default("en")
+  currency  String    @default("USD")
+  settings  Json      @default("{}")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users         User[]
+  roles         Role[]
+  departments   Department[]
+  teams         Team[]
+  contacts      Contact[]
+  accounts      Account[]
+  businessHours BusinessHours[]
+  holidays      Holiday[]
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+
+  @@index([deletedAt])
+  @@map("organizations")
+}
+
+model BusinessHours {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  timezone       String   @default("UTC")
+  isDefault      Boolean  @default(false)
+  /// [{ "day": 1, "start": "09:00", "end": "18:00" }]
+  weeklySchedule Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  holidays     Holiday[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("business_hours")
+}
+
+model Holiday {
+  id              String   @id @default(cuid())
+  organizationId  String
+  businessHoursId String
+  name            String
+  date            DateTime @db.Date
+  createdAt       DateTime @default(now())
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  businessHours BusinessHours @relation(fields: [businessHoursId], references: [id], onDelete: Cascade)
+
+  @@unique([businessHoursId, date])
+  @@index([organizationId, date])
+  @@map("holidays")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  organizationId  String
+  email           String
+  passwordHash    String?
+  firstName       String
+  lastName        String
+  avatarUrl       String?
+  phone           String?
+  type            UserType  @default(AGENT)
+  contactId       String?   @unique
+  isActive        Boolean   @default(true)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact       Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  roles         UserRole[]
+  departments   UserDepartment[]
+  teams         TeamMember[]
+  refreshTokens RefreshToken[]
+  tokens        VerificationToken[]
+  notifications Notification[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, isActive, deletedAt])
+  @@index([organizationId, type])
+  @@map("users")
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  systemKey      String?
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions  RolePermission[]
+  users        UserRole[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, systemKey])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+/// Global catalogue — intentionally NOT tenant scoped.
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  resource    String
+  action      String
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model Department {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  email          String?
+  isDefault      Boolean   @default(false)
+  parentId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Department[]     @relation("DepartmentHierarchy")
+  members      UserDepartment[]
+  teams        Team[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, deletedAt])
+  @@map("departments")
+}
+
+model UserDepartment {
+  userId       String
+  departmentId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, departmentId])
+  @@index([departmentId])
+  @@map("user_departments")
+}
+
+model Team {
+  id             String    @id @default(cuid())
+  organizationId String
+  departmentId   String?
+  name           String
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  members      TeamMember[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, departmentId])
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId String
+  userId String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Account {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  website        String?
+  industry       String?
+  phone          String?
+  email          String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String?
+  description    String?
+  customFields   Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts     Contact[]
+
+  @@index([organizationId, name])
+  @@index([organizationId, deletedAt])
+  @@map("accounts")
+}
+
+model Contact {
+  id             String        @id @default(cuid())
+  organizationId String
+  accountId      String?
+  firstName      String
+  lastName       String?
+  email          String?
+  phone          String?
+  mobile         String?
+  jobTitle       String?
+  avatarUrl      String?
+  status         ContactStatus @default(ACTIVE)
+  isVip          Boolean       @default(false)
+  customFields   Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  portalUser   User?
+
+  @@unique([organizationId, email])
+  @@index([organizationId, accountId])
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, lastName, firstName])
+  @@map("contacts")
+}
+
+model RefreshToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  tokenHash      String    @unique
+  familyId       String
+  userAgent      String?
+  ip             String?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model VerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  type           String
+  title          String
+  body           String?
+  link           String?
+  data           Json?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String    @id @default(cuid())
+  organizationId String
+  actorId        String?
+  actorType      ActorType @default(USER)
+  action         String
+  entity         String
+  entityId       String
+  oldValue       Json?
+  newValue       Json?
+  ip             String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entity, entityId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
