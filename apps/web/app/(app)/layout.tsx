@@ -1,12 +1,14 @@
 'use client';
 
 import { useRequireAuth } from '@/hooks/use-session';
+import { useRealtime } from '@/hooks/use-realtime';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { LoadingState } from '@/components/ui/states';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const status = useRequireAuth();
+  useRealtime();
 
   if (status === 'loading') {
     return (

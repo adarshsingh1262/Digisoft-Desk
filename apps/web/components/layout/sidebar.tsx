@@ -6,6 +6,7 @@ import {
   Building2,
   LayoutDashboard,
   Settings,
+  Ticket,
   Users,
   X,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ interface NavItem {
  */
 const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/tickets', label: 'Tickets', icon: Ticket, permission: PERMISSIONS.TICKET_READ },
   { href: '/customers', label: 'Customers', icon: Users, permission: PERMISSIONS.CONTACT_READ },
   { href: '/accounts', label: 'Accounts', icon: Building2, permission: PERMISSIONS.ACCOUNT_READ },
   { href: '/settings/organization', label: 'Settings', icon: Settings, permission: PERMISSIONS.ORGANIZATION_READ },
@@ -97,7 +99,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phase 1 — Foundation
+          Phases 1–2 · Foundation and core helpdesk
         </p>
       </aside>
     </>
