@@ -84,6 +84,13 @@ model Organization {
   communityTopics     CommunityTopic[]
   communityReplies    CommunityReply[]
   communityVotes      CommunityVote[]
+  channels            Channel[]
+  channelIdentities   ChannelIdentity[]
+  channelEvents       ChannelEvent[]
+  chatSessions        ChatSession[]
+  webhookEndpoints    WebhookEndpoint[]
+  webhookDeliveries   WebhookDelivery[]
+  apiKeys             ApiKey[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -164,6 +171,8 @@ model User {
   topics             CommunityTopic[]    @relation("AuthoredTopics")
   topicReplies       CommunityReply[]    @relation("AuthoredReplies")
   communityVotes     CommunityVote[]
+  apiKeys            ApiKey[]            @relation("ApiKeyIdentity")
+  createdApiKeys     ApiKey[]            @relation("ApiKeyCreator")
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -184,6 +193,7 @@ model Role {
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   permissions  RolePermission[]
   users        UserRole[]
+  apiKeys      ApiKey[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
@@ -248,6 +258,7 @@ model Department {
   tickets         Ticket[]
   assignmentRules AssignmentRule[]
   webForms        WebForm[]
+  channels        Channel[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -346,12 +357,14 @@ model Contact {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  account      Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  portalUser   User?
-  tickets      Ticket[]
-  messages     TicketMessage[]
-  activities   Activity[]
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  portalUser        User?
+  channelIdentities ChannelIdentity[]
+  chatSessions      ChatSession[]
+  tickets           Ticket[]
+  messages          TicketMessage[]
+  activities        Activity[]
 
   @@unique([organizationId, email])
   @@index([organizationId, accountId])
@@ -521,6 +534,7 @@ model TicketPriority {
   tickets      Ticket[]
   slaTargets   SlaTarget[]
   webForms     WebForm[]
+  channels     Channel[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
@@ -543,6 +557,7 @@ model TicketCategory {
   children     TicketCategory[] @relation("CategoryHierarchy")
   tickets      Ticket[]
   webForms     WebForm[]
+  channels     Channel[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -571,6 +586,8 @@ model Ticket {
   subject                   String
   description               String
   source                    TicketSource @default(AGENT)
+  /// The configured channel this ticket arrived on; replies go back out the same way.
+  channelId                 String?
   contactId                 String?
   accountId                 String?
   departmentId              String?
@@ -618,6 +635,7 @@ model Ticket {
   activities      Activity[]
   automationRuns  AutomationRun[]
   communityTopics CommunityTopic[]
+  chatSessions    ChatSession[]
 
   messages    TicketMessage[]
   attachments Attachment[]
@@ -625,6 +643,7 @@ model Ticket {
   followers   TicketFollower[]
   links       TicketLink[]     @relation("TicketLinkSource")
   linkedFrom  TicketLink[]     @relation("TicketLinkTarget")
+  channel     Channel?         @relation(fields: [channelId], references: [id])
 
   @@unique([organizationId, ticketNumber])
   @@index([organizationId, statusId, createdAt])
@@ -799,6 +818,9 @@ model Activity {
   callDirection       CallDirection?
   callDurationSeconds Int?
   callOutcome         String?
+  /// Provider's call id and recording, set by a telephony channel.
+  externalCallId      String?
+  recordingUrl        String?
   location            String?
   ticketId            String?
   contactId           String?
@@ -816,6 +838,7 @@ model Activity {
   assignedTo   User?        @relation("AssignedActivities", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdBy    User?        @relation("CreatedActivities", fields: [createdById], references: [id], onDelete: SetNull)
 
+  @@unique([organizationId, externalCallId])
   @@index([organizationId, type, status, dueAt])
   @@index([organizationId, ticketId])
   @@index([organizationId, contactId])
@@ -1276,4 +1299,242 @@ model CommunityVote {
   @@unique([replyId, userId])
   @@index([organizationId, userId])
   @@map("community_votes")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — omnichannel: channels, inbound events, live chat, outbound webhooks
+// and API keys.
+// ---------------------------------------------------------------------------
+
+enum ChannelType {
+  EMAIL
+  CHAT
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  TELEGRAM
+  VOICE
+}
+
+enum ChannelEventStatus {
+  RECEIVED
+  PROCESSED
+  /// Deliberately not turned into a message (auto-reply, loop, unknown recipient).
+  IGNORED
+  FAILED
+}
+
+enum ChatSessionStatus {
+  QUEUED
+  ACTIVE
+  ENDED
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+/// One configured way in and out of the help desk. Secrets are encrypted at rest and
+/// never leave the API; `config` holds only values that are safe to show an agent.
+model Channel {
+  id             String      @id @default(cuid())
+  organizationId String
+  type           ChannelType
+  /// Adapter key inside the type, e.g. `mailgun`, `whatsapp_cloud`, `twilio`.
+  provider       String
+  name           String
+  isActive       Boolean     @default(true)
+  /// Address, phone number, page id or bot handle this channel answers on.
+  identifier     String?
+  /// Non-secret settings: signature mode, reply-to, greeting, working-hours notice.
+  config         Json        @default("{}")
+  /// AES-256-GCM blob holding the provider credentials.
+  secrets        String?
+  /// Shared secret for the inbound webhook URL, shown once when the channel is created.
+  webhookSecret  String?
+  /// Tickets raised by this channel start here.
+  departmentId   String?
+  priorityId     String?
+  categoryId     String?
+  lastInboundAt  DateTime?
+  lastOutboundAt DateTime?
+  lastErrorAt    DateTime?
+  lastError      String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  priority     TicketPriority?   @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+  category     TicketCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  events       ChannelEvent[]
+  identities   ChannelIdentity[]
+  chatSessions ChatSession[]
+  tickets      Ticket[]
+
+  @@unique([organizationId, type, identifier])
+  @@index([organizationId, type, isActive])
+  @@index([organizationId, deletedAt])
+  @@map("channels")
+}
+
+/// Who a contact is on a given channel: an email address, a phone number, a page-scoped
+/// id or a chat id. One contact can hold several.
+model ChannelIdentity {
+  id             String      @id @default(cuid())
+  organizationId String
+  channelId      String?
+  type           ChannelType
+  /// Normalised external identity (lowercased address, E.164 number, provider id).
+  externalId     String
+  displayName    String?
+  contactId      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel?     @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type, externalId])
+  @@index([organizationId, contactId])
+  @@map("channel_identities")
+}
+
+/// Every inbound payload, stored before it is interpreted: the dedupe key, the audit
+/// trail and the thing you re-run when a parser bug is fixed.
+model ChannelEvent {
+  id             String             @id @default(cuid())
+  organizationId String
+  channelId      String
+  /// Provider's own id for the event; the unique index is what makes delivery idempotent.
+  externalId     String
+  status         ChannelEventStatus @default(RECEIVED)
+  payload        Json
+  error          String?
+  ticketId       String?
+  messageId      String?
+  processedAt    DateTime?
+  createdAt      DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, externalId])
+  @@index([organizationId, status, createdAt])
+  @@map("channel_events")
+}
+
+/// A live chat visit. The conversation itself is an ordinary ticket, so automation,
+/// SLA and the agent workspace apply to chat exactly as they do to email.
+model ChatSession {
+  id             String            @id @default(cuid())
+  organizationId String
+  channelId      String?
+  ticketId       String?
+  contactId      String?
+  /// Hash of the opaque token the widget holds; the token itself is never stored.
+  tokenHash      String            @unique
+  status         ChatSessionStatus @default(QUEUED)
+  visitorName    String?
+  visitorEmail   String?
+  pageUrl        String?
+  userAgent      String?
+  ip             String?
+  startedAt      DateTime          @default(now())
+  lastSeenAt     DateTime          @default(now())
+  endedAt        DateTime?
+  rating         Int?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel?     @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  ticket       Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, lastSeenAt])
+  @@index([organizationId, ticketId])
+  @@map("chat_sessions")
+}
+
+/// An HTTP endpoint the organization wants told about events, with its own signing key.
+model WebhookEndpoint {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  url            String
+  /// Signing key for the `X-Digisoft-Signature` header; shown once at creation.
+  secret         String
+  /// Event names this endpoint wants; empty means every event.
+  events         String[]  @default([])
+  isActive       Boolean   @default(true)
+  lastSuccessAt  DateTime?
+  lastFailureAt  DateTime?
+  failureCount   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId, isActive])
+  @@index([organizationId, deletedAt])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String         @id @default(cuid())
+  organizationId String
+  endpointId     String
+  event          String
+  payload        Json
+  status         DeliveryStatus @default(PENDING)
+  attempts       Int            @default(0)
+  responseStatus Int?
+  responseBody   String?
+  error          String?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, endpointId, createdAt])
+  @@index([organizationId, status])
+  @@map("webhook_deliveries")
+}
+
+/// Machine access. The key is shown once; only its hash is stored, and it carries a
+/// role so an integration is authorised through exactly the same permission checks.
+/// Machine access. Every key is backed by its own service user, so a call from an
+/// integration is authorised, audited and attributed exactly like one from a person.
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// The service user this key acts as.
+  userId         String    @unique
+  /// Visible prefix (`dsk_live_ab12…`) so a key can be recognised without revealing it.
+  prefix         String
+  keyHash        String    @unique
+  roleId         String
+  createdById    String?
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user         User         @relation("ApiKeyIdentity", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, revokedAt])
+  @@map("api_keys")
 }

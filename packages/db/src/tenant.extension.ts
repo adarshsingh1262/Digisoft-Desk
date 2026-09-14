@@ -41,6 +41,13 @@ export const TENANT_MODELS: ReadonlySet<string> = new Set([
   'CommunityTopic',
   'CommunityReply',
   'CommunityVote',
+  'Channel',
+  'ChannelIdentity',
+  'ChannelEvent',
+  'ChatSession',
+  'WebhookEndpoint',
+  'WebhookDelivery',
+  'ApiKey',
 ]);
 
 /** Models with a `deletedAt` column that should be hidden from ordinary reads. */
@@ -61,6 +68,8 @@ export const SOFT_DELETE_MODELS: ReadonlySet<string> = new Set([
   'CommunityCategory',
   'CommunityTopic',
   'CommunityReply',
+  'Channel',
+  'WebhookEndpoint',
 ]);
 
 const WHERE_OPERATIONS = new Set([
