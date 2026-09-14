@@ -27,7 +27,9 @@ export const envSchema = z.object({
   /** Disabled only by the e2e harness so suites can replay the same route. */
   THROTTLE_ENABLED: bool.default(true),
   THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
-  THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+  /** A single workspace navigation fans out to several endpoints, so this is per
+   * user-minute rather than per page view. */
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(300),
   AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 
   EMAIL_PROVIDER: z.enum(['smtp', 'ses', 'console']).default('console'),
@@ -39,7 +41,12 @@ export const envSchema = z.object({
   SMTP_SECURE: bool.default(false),
   AWS_REGION: z.string().optional(),
 
-  STORAGE_PROVIDER: z.enum(['s3', 'none']).default('none'),
+  /** `local` writes to disk and streams downloads through the API; `s3` presigns. */
+  STORAGE_PROVIDER: z.enum(['local', 's3']).default('local'),
+  STORAGE_LOCAL_PATH: z.string().default('./storage'),
+  S3_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().max(604800).default(300),
+  /** Hard ceiling on a single upload, in bytes. */
+  ATTACHMENT_MAX_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().optional(),
   S3_BUCKET: z.string().optional(),

@@ -16,3 +16,4 @@ coverage/
 /tmp-pg/
 test-results/
 playwright-report/
+storage/
