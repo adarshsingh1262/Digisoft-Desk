@@ -17,3 +17,12 @@ export function optionalField<T extends z.ZodTypeAny>(schema: T) {
     .transform((value): z.output<T> | null => (value === '' ? null : (value as z.output<T>)))
     .optional();
 }
+
+/**
+ * Boolean query-string parameter. `z.coerce.boolean()` treats any non-empty string —
+ * including "false" — as true, which silently inverts `?flag=false`. This accepts the
+ * spellings a client actually sends and rejects anything else.
+ */
+export const queryBoolean = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((value) => value === true || value === 'true' || value === '1');

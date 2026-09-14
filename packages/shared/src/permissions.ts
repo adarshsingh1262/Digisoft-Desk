@@ -48,6 +48,15 @@ export const PERMISSIONS = {
   ATTACHMENT_CREATE: 'attachment.create',
   ATTACHMENT_DELETE: 'attachment.delete',
 
+  ACTIVITY_READ: 'activity.read',
+  ACTIVITY_CREATE: 'activity.create',
+  ACTIVITY_UPDATE: 'activity.update',
+  ACTIVITY_DELETE: 'activity.delete',
+
+  /// Assignment rules, automation rules, escalations, SLA policies and blueprints.
+  OPERATIONS_READ: 'operations.read',
+  OPERATIONS_MANAGE: 'operations.manage',
+
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -86,6 +95,11 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.TICKET_REPLY,
     PERMISSIONS.TICKET_COMMENT,
     PERMISSIONS.ATTACHMENT_CREATE,
+    PERMISSIONS.ACTIVITY_READ,
+    PERMISSIONS.ACTIVITY_CREATE,
+    PERMISSIONS.ACTIVITY_UPDATE,
+    PERMISSIONS.ACTIVITY_DELETE,
+    PERMISSIONS.OPERATIONS_READ,
   ],
   /// Collaborators: they can read their departments' queues and comment internally,
   /// but never reply to a customer and never see the whole organization's tickets.
@@ -97,6 +111,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.ACCOUNT_READ,
     PERMISSIONS.TICKET_READ,
     PERMISSIONS.TICKET_COMMENT,
+    PERMISSIONS.ACTIVITY_READ,
   ],
   CUSTOMER: [],
 };

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './pagination';
 import { passwordSchema } from './auth';
-import { optionalField } from './field';
+import { optionalField, queryBoolean } from './field';
 
 export const createUserSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
@@ -31,7 +31,7 @@ export const setUserRolesSchema = z.object({ roleIds: z.array(z.string().min(1))
 export const setUserDepartmentsSchema = z.object({ departmentIds: z.array(z.string().min(1)) });
 
 export const listUsersQuerySchema = paginationQuerySchema.extend({
-  isActive: z.coerce.boolean().optional(),
+  isActive: queryBoolean.optional(),
   departmentId: z.string().min(1).optional(),
   roleId: z.string().min(1).optional(),
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './pagination';
-import { optionalField } from './field';
+import { optionalField, queryBoolean } from './field';
 
 export const CONTACT_STATUSES = ['ACTIVE', 'INACTIVE', 'BLOCKED'] as const;
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
@@ -26,6 +26,6 @@ export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 export const listContactsQuerySchema = paginationQuerySchema.extend({
   accountId: z.string().min(1).optional(),
   status: z.enum(CONTACT_STATUSES).optional(),
-  isVip: z.coerce.boolean().optional(),
+  isVip: queryBoolean.optional(),
 });
 export type ListContactsQuery = z.infer<typeof listContactsQuerySchema>;

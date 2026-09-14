@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './pagination';
-import { optionalField } from './field';
+import { optionalField, queryBoolean } from './field';
 
 export const TICKET_SOURCES = [
   'AGENT',
@@ -112,9 +112,9 @@ export const listTicketsQuerySchema = paginationQuerySchema.extend({
   tagId: z.string().min(1).optional(),
   source: z.enum(TICKET_SOURCES).optional(),
   /** Convenience filters the agent workspace uses for its saved views. */
-  assignedToMe: z.coerce.boolean().optional(),
-  unassigned: z.coerce.boolean().optional(),
-  open: z.coerce.boolean().optional(),
+  assignedToMe: queryBoolean.optional(),
+  unassigned: queryBoolean.optional(),
+  open: queryBoolean.optional(),
 });
 export type ListTicketsQuery = z.infer<typeof listTicketsQuerySchema>;
 
@@ -128,6 +128,8 @@ export const ticketStatusSchema = z.object({
   isDefault: z.boolean().default(false),
   isResolved: z.boolean().default(false),
   isClosed: z.boolean().default(false),
+  /** Stops the SLA clock while the ticket waits on someone else. */
+  pausesSla: z.boolean().default(false),
 });
 export type TicketStatusInput = z.infer<typeof ticketStatusSchema>;
 

@@ -9,4 +9,6 @@ export * from './department';
 export * from './contact';
 export * from './account';
 export * from './ticket';
+export * from './rules';
+export * from './operations';
 export * from './api';
