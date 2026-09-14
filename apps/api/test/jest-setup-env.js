@@ -35,3 +35,6 @@ process.env.JWT_REFRESH_SECRET =
 process.env.EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'console';
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 process.env.THROTTLE_ENABLED = process.env.THROTTLE_ENABLED || 'false';
+// Channel credentials are encrypted even in tests; this key exists only here.
+process.env.CHANNEL_ENCRYPTION_KEY =
+  process.env.CHANNEL_ENCRYPTION_KEY || Buffer.alloc(32, 7).toString('base64');
