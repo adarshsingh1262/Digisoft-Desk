@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Data Model
 
-> Status: **Phases 1–3 are implemented and migrated.** Later-phase tables are planned
+> Status: **Phases 1–4 are implemented and migrated.** Later-phase tables are planned
 > shapes, not yet created.
 
 Schema, migrations and seed live in `packages/db`. The initial migration is
@@ -32,8 +32,9 @@ Organization (tenant root)
 ├── AutomationRule (trigger + conditions JSONB + actions JSONB)
 ├── AssignmentRule
 ├── Blueprint ──< BlueprintTransition
+├── HelpCenter (one per organization: portal address, branding, switches)
 ├── KbCategory ──< KbArticle ──< KbArticleFeedback
-├── CommunityTopic ──< CommunityPost ──< CommunityVote
+├── CommunityCategory ──< CommunityTopic ──< CommunityReply ──< CommunityVote
 ├── Channel (email/chat/whatsapp/... config, secrets encrypted)
 ├── WebForm
 ├── Notification
@@ -267,7 +268,30 @@ model AuditLog {
   - `TicketStatus.pausesSla` marks statuses that stop the clock (On Hold and Pending by
     default). `AutomationRun` records every evaluation, matched or not, with the action
     outcomes, so "why didn't my rule fire" is answerable from the data.
-- **Phase 4** — `KbCategory`, `KbArticle` (tsvector column + GIN index), `KbArticleFeedback`, `WebForm`, `CommunityTopic`, `CommunityPost`, `CommunityVote`.
+- **Phase 4 (built)** — `HelpCenter`, `KbCategory`, `KbArticle`, `KbArticleFeedback`,
+  `WebForm`, `CommunityCategory`, `CommunityTopic`, `CommunityReply`, `CommunityVote`,
+  plus the enums `ArticleStatus`, `ContentVisibility`, `TopicType`, `TopicStatus` and
+  `ModerationStatus`. Four decisions differ from the sketch:
+  - **`HelpCenter` is its own table**, one row per organization, holding the portal
+    address (`slug`, unique across the platform — it is how an anonymous request finds
+    its tenant), branding and the feature switches. Organization settings JSON would
+    have made the slug unindexable and the switches untyped.
+  - **No tsvector column yet.** Portal search runs two indexed `ILIKE` queries — title
+    and keywords first, then summary and body — and merges them, so title matches rank
+    above body matches without a search engine in front of PostgreSQL. The generated
+    `tsvector` + GIN index is the upgrade path when volume needs it, behind the same
+    endpoint.
+  - **`CommunityReply`, not `CommunityPost`**, and authorship is a `User` on topics,
+    replies and votes alike: a portal visitor *is* a `User` of type `CUSTOMER` linked to
+    a `Contact`, so one relation covers customers and agents and `@@unique([topicId,
+    userId])` / `@@unique([replyId, userId])` make one-vote-per-person a database rule.
+  - **Counters are maintained transactionally.** `CommunityTopic.replyCount` /
+    `voteCount`, `CommunityReply.voteCount` and `KbArticle.helpfulCount` /
+    `notHelpfulCount` move in the same transaction as the row that caused them, so a
+    listing never has to aggregate. Approving or rejecting a held reply adjusts the
+    topic's count in the same step.
+  - Soft deletes release the slug (`…-deleted-<time>`), so an address can be used again
+    after the row it belonged to is gone.
 - **Phase 5** — `Channel`, `EmailInbox`, `EmailMessageRef`, `ChatConversation`, `CallLog`, `WebhookEndpoint`, `WebhookDelivery`.
 - **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
 - **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
@@ -303,4 +327,9 @@ owning service verifies first. `Permission` is a global catalogue by design.
 
 Every one of these is a composite index leading with `organizationId`:
 `Ticket(statusId)`, `Ticket(priorityId)`, `Ticket(assignedAgentId, statusId)`, `Ticket(departmentId, statusId)`, `Ticket(contactId)`, `Ticket(accountId)`, `Ticket(createdAt)`, `Ticket(dueAt)` (partial: `WHERE "closedAt" IS NULL`), `TicketMessage(ticketId, createdAt)`, `Activity(ticketId)`, `AuditLog(entity, entityId, createdAt)`, `Contact(email)`, `Account(name)`.
-Full-text: generated `tsvector` columns with GIN indexes on `Ticket(subject, description)` and `KbArticle(title, body)`; the search layer sits behind a `SearchService` interface so OpenSearch can replace the implementation (§44).
+Phase 4 adds: `KbArticle(status, visibility)`, `KbArticle(categoryId, position)`,
+`KbCategory(parentId, position)`, `WebForm(isActive)`, `CommunityTopic(categoryId,
+lastActivityAt)`, `CommunityTopic(moderation)`, `CommunityReply(topicId, createdAt)`,
+`CommunityVote(userId)`, plus the platform-wide unique `HelpCenter(slug)`.
+
+Full-text: generated `tsvector` columns with GIN indexes on `Ticket(subject, description)` and `KbArticle(title, body)` are the planned upgrade — today both searches use indexed `ILIKE` — and the search layer sits behind a `SearchService` interface so OpenSearch can replace the implementation (§44).

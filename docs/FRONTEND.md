@@ -11,8 +11,8 @@ Three route groups with separate layouts and separate auth expectations.
 /customers                    contacts list
 /customers/[id]
 /accounts  /accounts/[id]
-/knowledge-base  /knowledge-base/articles/[id]  /knowledge-base/categories
-/community  /community/[topicId]
+/knowledge-base  /knowledge-base/new  /knowledge-base/[id]   (categories in a dialog)
+/community  /community/[id]                                   (categories in a dialog)
 /reports  /reports/[reportId]
 /automation/rules  /automation/assignment  /automation/sla  /automation/blueprints
 /channels  /channels/[id]
@@ -21,16 +21,26 @@ Three route groups with separate layouts and separate auth expectations.
           categories,tags,business-hours,web-forms,webhooks,notifications}
 ```
 
-## `(portal)` — customer portal (authenticated contacts, fully responsive)
+## `(portal)` — the help center, one route group for every tenant (built)
+
+The organization is addressed by its help center slug, so a single deployment serves
+every customer-facing site. Anonymous and signed-in visitors share these routes; what
+they may see is decided by the API, not by hiding links.
+
 ```
-/portal  /portal/tickets  /portal/tickets/new  /portal/tickets/[id]
-/portal/profile  /portal/notifications
+/help/[slug]                          home: search, categories, most read, calls to action
+/help/[slug]/kb                       browse, filter by category
+/help/[slug]/kb/[articleSlug]         article, "was this helpful", related articles
+/help/[slug]/submit                   web form, with knowledge base deflection above it
+/help/[slug]/tickets                  my requests (signed in)
+/help/[slug]/tickets/[id]             conversation, reply, attachments, close
+/help/[slug]/community                topics, new topic (signed in)
+/help/[slug]/community/[topicSlug]    topic, replies, votes, accepted answer
+/help/[slug]/login  /register  /forgot-password  /reset-password
 ```
 
-## `(public)` — help center (SEO, server-rendered, ISR)
+## `(auth)` — agent sign-in
 ```
-/help  /help/[categorySlug]  /help/articles/[slug]  /help/search
-/help/submit-ticket
 /login  /register  /forgot-password  /reset-password  /verify-email
 ```
 

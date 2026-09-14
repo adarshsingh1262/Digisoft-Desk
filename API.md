@@ -1,7 +1,7 @@
 # Digisoft360 Help Desk — API Reference and Plan
 
-> Status: endpoints marked **P1** are **implemented and tested**. Everything else is
-> planned for the phase noted beside it and is not reachable yet.
+> Status: endpoints marked **P1**–**P4** are **implemented and tested**. Everything else
+> is planned for the phase noted beside it and is not reachable yet.
 
 Base path `/api/v1`. All responses use the envelope:
 
@@ -161,25 +161,104 @@ Messages accept `{{ticket.number}} {{ticket.subject}} {{ticket.status}}
 
 **Query booleans** are parsed strictly: `true|false|1|0`. Anything else is a 400.
 
-## Self-service — P4
+## Self-service — P4 (implemented)
+
+### Knowledge base (agent side)
 ```
-GET|POST /knowledge-base/categories · /:id
-GET|POST /knowledge-base/articles   · /:id · POST /:id/publish|/archive
-POST     /knowledge-base/articles/:id/feedback
-GET      /knowledge-base/search?q=
-
-GET|POST /web-forms · /:id
-POST     /public/forms/:slug/submit          # @Public, captcha + rate limited
-
-# Help center / customer portal (customer JWT)
-GET  /portal/tickets · /portal/tickets/:id · POST /portal/tickets
-POST /portal/tickets/:id/replies
-GET  /portal/profile · PATCH /portal/profile
-GET  /public/help/categories · /public/help/articles · /public/help/articles/:slug
-
-GET|POST /community/topics · /:id · POST /:id/posts · POST /posts/:id/vote
-POST     /community/posts/:id/moderate
+GET|POST /kb/categories             · PATCH|DELETE /kb/categories/:id
+GET      /kb/articles               # ?categoryId&status&visibility&authorId&mine&q&sort
+GET|POST /kb/articles               · PATCH|DELETE /kb/articles/:id
+POST     /kb/articles/:id/publish | /unpublish
+GET      /kb/articles/:id/feedback  # what readers said, newest first
 ```
+`kb.read` to read, `kb.manage` to write. A slug is derived from the title when one is
+not supplied and made unique per organization (`how-to-x`, `how-to-x-2`, …); deleting a
+category or article releases its slug for reuse. `visibility` is `PUBLIC` (anyone),
+`PORTAL_USERS` (signed-in customers) or `AGENTS_ONLY`, and an article inside a hidden
+category is hidden with it. `status` is `DRAFT · PENDING_REVIEW · PUBLISHED · ARCHIVED`;
+only `PUBLISHED` is ever served to the portal, and `publishedAt` is stamped once.
+
+### Help center settings and web forms (agent side)
+```
+GET      /help-center               · PATCH /help-center
+GET      /help-center/slug-suggestion?preferred=
+GET|POST /web-forms                 · GET|PATCH|DELETE /web-forms/:id
+```
+`portal.read` to read, `portal.manage` to change. The help center carries the portal
+address (unique across the platform), branding and the switches that decide what the
+site offers: `isPublished · allowPublicBrowsing · allowSelfRegistration ·
+allowTicketSubmission · kbEnabled · communityEnabled · moderateCommunity`. Changes take
+effect immediately — the portal's slug cache is dropped on write.
+
+A web form's `fields` are `{ key, label, type, required, placeholder, helpText,
+options, mapsTo }` where `type` is `TEXT · TEXTAREA · EMAIL · PHONE · NUMBER · SELECT ·
+CHECKBOX · DATE` and `mapsTo` is `subject · description · name · email · phone ·
+custom`. Exactly one field must map to `description`; unmapped values are stored on the
+ticket's `customFields`.
+
+### Community moderation (agent side)
+```
+GET|POST /community/categories      · PATCH|DELETE /community/categories/:id
+GET      /community/topics          # ?categoryId&type&status&moderation&mine&unanswered&q
+GET      /community/topics/:id      · DELETE /community/topics/:id
+PATCH    /community/topics/:id/moderate   # { moderation, status, isPinned, isLocked, categoryId }
+POST     /community/topics/:id/replies    # an agent answering in public
+PATCH    /community/replies/:id/moderate  # { moderation, isAnswer }
+DELETE   /community/replies/:id
+```
+All of it requires `community.moderate`.
+
+### Customer portal — `/portal/:slug/…` (no agent token)
+Every route below is public to the platform guard; `PortalGuard` then applies the help
+center's own rules. A bearer token from a different organization is refused with 403, a
+help center that is not published answers 404, and with `allowPublicBrowsing` off every
+route except sign-in, sign-up and password reset answers 401.
+
+```
+GET  /portal/:slug                          # branding + which areas are enabled
+
+GET  /portal/:slug/kb/categories
+GET  /portal/:slug/kb/articles              # ?categoryId&page&pageSize
+GET  /portal/:slug/kb/search?q=&limit=      # title and keyword matches rank first
+GET  /portal/:slug/kb/articles/:idOrSlug    # counts the view, returns related articles
+POST /portal/:slug/kb/articles/:id/feedback # { isHelpful, comment? } — one vote per signed-in reader
+
+GET  /portal/:slug/forms · /forms/:formSlug
+POST /portal/:slug/forms/:formSlug/submit   # { values, website? } -> ticket (source WEB_FORM)
+
+POST /portal/:slug/auth/register            # { firstName, lastName?, email, password }
+POST /portal/:slug/auth/login
+POST /portal/:slug/auth/forgot-password     # reset link points back at this help center
+GET  /portal/:slug/auth/me
+
+GET  /portal/:slug/tickets                  # ?open&q&page — the caller's own requests only
+GET  /portal/:slug/tickets/options          # departments, categories, priorities
+POST /portal/:slug/tickets                  # source PORTAL
+GET  /portal/:slug/tickets/:id              # public replies only, never internal comments
+POST /portal/:slug/tickets/:id/replies      # inbound message; reopens a resolved request
+POST /portal/:slug/tickets/:id/attachments  # multipart/form-data, field "file"
+GET  /portal/:slug/tickets/attachments/:id/download
+POST /portal/:slug/tickets/:id/close
+
+GET  /portal/:slug/community/categories · /community/topics · /community/topics/:idOrSlug
+POST /portal/:slug/community/topics             # held for review when moderation is on
+PATCH|DELETE /portal/:slug/community/topics/:id # author only
+POST /portal/:slug/community/topics/:id/replies
+POST /portal/:slug/community/topics/:id/vote    # toggle
+POST /portal/:slug/community/replies/:id/vote   # toggle
+POST /portal/:slug/community/replies/:id/accept # the topic's author accepts an answer
+DELETE /portal/:slug/community/replies/:id
+```
+
+A portal visitor is a `User` of type `CUSTOMER` linked to a `Contact`, so the session,
+refresh-token rotation and password rules are the ones the agent app already uses:
+`/auth/refresh` and `/auth/logout` serve both audiences. Sign-up reuses the contact an
+agent (or an earlier form submission) already created for that email address, so the
+customer sees their existing requests the first time they sign in.
+
+Anti-spam on public submissions: a honeypot field (`website`) — a filled one is answered
+as success and stored nowhere — plus the standard rate limiter (5 submissions/minute per
+IP, 10 sign-ins, 5 sign-ups).
 
 ## Channels — P5
 ```

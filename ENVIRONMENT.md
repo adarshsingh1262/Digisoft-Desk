@@ -90,3 +90,10 @@ single-node self-hosting. Anything running more than one API instance needs `s3`
 ## Seed
 
 `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` — used only by `pnpm db:seed`.
+
+## Phase 4 — self-service
+
+Phase 4 introduced no new environment variables. The customer portal is served by the
+same Next.js deployment (`/help/<slug>`) and the same API (`/api/v1/portal/<slug>/…`),
+so `FRONTEND_URL` is what password-reset and verification links for customers are built
+from, and `CORS`/cookie settings are shared with the agent app.

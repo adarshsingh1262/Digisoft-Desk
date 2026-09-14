@@ -3,13 +3,14 @@
 A multi-tenant customer support platform: ticketing, SLA, automation, knowledge base,
 omnichannel and AI assistance.
 
-**Status: Phases 1–3 implemented.** Authentication, RBAC, organizations, users,
+**Status: Phases 1–4 implemented.** Authentication, RBAC, organizations, users,
 departments, teams, contacts, accounts, the full ticketing core — conversations,
-internal comments, attachments, history, the agent workspace — and the operations
-layer: activities, assignment rules, an automation engine with escalations, SLA with
-business hours and a background sweep, and blueprint workflows. Self-service, the
-other channels, AI and analytics are not built yet, and the UI does not pretend
-otherwise.
+internal comments, attachments, history, the agent workspace — the operations layer —
+activities, assignment rules, an automation engine with escalations, SLA with business
+hours and a background sweep, blueprint workflows — and self-service: a branded help
+center per organization with a knowledge base, web forms, customer accounts, "my
+requests" and a moderated community. The other channels, AI and analytics are not built
+yet, and the UI does not pretend otherwise.
 
 ```bash
 cp .env.example .env     # set the two JWT secrets
@@ -74,6 +75,21 @@ packages/shared  Zod schemas and types shared by the frontend and backend
   warnings and breaches exactly once.
 - **Blueprints**: configurable state machines with required fields and role
   restrictions; a governed ticket can only move along its allowed transitions.
+- **Help center**: one customer-facing site per organization at `/help/<slug>`, with its
+  own branding and switches for public browsing, sign-up, request submission, the
+  knowledge base and the community. Settings take effect immediately.
+- **Knowledge base**: categories and Markdown articles with draft/published states and
+  three visibility levels, slugs derived from titles, portal search that ranks title
+  matches first, view counts and "was this helpful" feedback the author can read.
+- **Web forms**: a field builder whose submissions become tickets — routed, given an SLA
+  and put through automation like any other ticket — with a honeypot and rate limiting
+  instead of a third-party captcha.
+- **Customer portal**: customers sign up (reusing the contact an agent already has for
+  that address), raise requests, reply with attachments, reopen a resolved request by
+  replying, and close their own. They never see an internal comment, and never another
+  customer's request.
+- **Community**: categories, topics, replies, one-vote-per-person upvotes, accepted
+  answers, and an optional moderation queue agents work from the agent app.
 - **Background jobs and realtime**: a worker that sends email, runs automation and
   sweeps SLAs, and an authenticated Socket.IO gateway whose ticket events reach only
   the sockets entitled to that ticket.
@@ -83,9 +99,9 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | Suite | Count | Command |
 |---|---|---|
 | Engine unit (business hours, conditions, blueprints) | 24 | `pnpm --filter @digisoft/engine test` |
-| API unit | 59 | `pnpm --filter @digisoft/api test` |
-| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations) | 86 | `pnpm --filter @digisoft/api test:e2e` |
-| Browser (register, customers, ticket workflow, automation and SLA) | 9 | `pnpm --filter @digisoft/web test:e2e` |
+| API unit | 73 | `pnpm --filter @digisoft/api test` |
+| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community) | 115 | `pnpm --filter @digisoft/api test:e2e` |
+| Browser (register, customers, ticket workflow, automation and SLA, help center and community) | 15 | `pnpm --filter @digisoft/web test:e2e` |
 
 ## Documentation
 
@@ -101,13 +117,14 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | [docs/PHASE-1-PLAN.md](./docs/PHASE-1-PLAN.md) | Phase 1 scope and status |
 | [docs/PHASE-2-PLAN.md](./docs/PHASE-2-PLAN.md) | Phase 2 scope, decisions and status |
 | [docs/PHASE-3-PLAN.md](./docs/PHASE-3-PLAN.md) | Phase 3 scope, decisions and status |
+| [docs/PHASE-4-PLAN.md](./docs/PHASE-4-PLAN.md) | Phase 4 scope, decisions and status |
 
 ## Roadmap
 
 1. ~~**Foundation** — workspace, Docker, Prisma, auth, RBAC, organizations, users, departments, contacts, accounts~~ ✅
 2. ~~**Core helpdesk** — tickets, statuses, priorities, assignment, conversations, internal comments, attachments, history, agent workspace~~ ✅
 3. ~~**Support operations** — activities, assignment rules, automation engine, SLA, escalation, blueprints~~ ✅
-4. **Self-service** — knowledge base, help center, customer portal, web forms, community
+4. ~~**Self-service** — knowledge base, help center, customer portal, web forms, community~~ ✅
 5. **Omnichannel** — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony
 6. **AI** — summary, sentiment, intent, suggested reply, KB-grounded answers; pgvector/RAG later
 7. **Analytics** — dashboards, reports, agent performance, SLA reporting, CSAT

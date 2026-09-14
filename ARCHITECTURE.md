@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Architecture
 
-> Status: **Phases 1–3 implemented.** Sections describing later phases are marked as planned.
+> Status: **Phases 1–4 implemented.** Sections describing later phases are marked as planned.
 
 ## 1. Final architecture
 
@@ -69,7 +69,11 @@ Digisoft-Desk/
 │   │   │   ├── activities/       # tasks, calls, events
 │   │   │   ├── operations/       # assignment rules, automation/escalations, SLA policies, blueprints
 │   │   │   ├── engine/           # the API's handle on @digisoft/engine + trigger queue
-│   │   │   └── (knowledge-base, help-center, channels, … arrive in later phases)
+│   │   │   ├── kb/               # knowledge base categories and articles (agent side)
+│   │   │   ├── help-center/      # portal settings and web forms (agent side)
+│   │   │   ├── community/        # community moderation (agent side)
+│   │   │   ├── portal/           # the customer-facing help center: content, accounts, requests, community
+│   │   │   └── (channels, ai, analytics … arrive in later phases)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
@@ -79,8 +83,9 @@ Digisoft-Desk/
 │   │
 │   └── web/                      # Next.js App Router
 │       ├── app/(auth)            # login, register, forgot-password, reset-password
-│       ├── app/(app)             # dashboard, tickets, customers, accounts, settings
-│       ├── components/{ui,layout,auth,tickets,customers,accounts,settings}
+│       ├── app/(app)             # dashboard, tickets, activities, knowledge base, community, automation, settings
+│       ├── app/(portal)/help/[slug]   # the customer-facing help center, one deployment for every tenant
+│       ├── components/{ui,layout,auth,tickets,customers,accounts,settings,kb,community,help-center,portal}
 │       ├── hooks/ lib/ services/ stores/ types/ e2e/
 │       └── Dockerfile
 │
@@ -174,6 +179,34 @@ evaluation rather than storming the rules.
 Business-hours arithmetic uses `Intl` alone: working windows live in the calendar's
 timezone and are converted per day, so DST shifts and holidays are honoured without a
 date library.
+
+## 5c. The customer portal
+
+One Next.js route group, `app/(portal)/help/[slug]`, serves every organization's help
+center; the slug in the URL is what decides which one. On the API side that address is
+resolved by `PortalContextMiddleware`, which looks the help center up (cached in Redis
+for 30 seconds, dropped the moment settings change) and opens the tenant scope for
+visitors who have no token to open one with. `PortalGuard` then does the rest in one
+place: the site must exist and be published, a bearer token must belong to the same
+organization as the site (a token from another tenant is refused, never ignored), and
+the site's own switches decide whether an anonymous visitor may read anything at all.
+
+Portal routes are `@Public()` to the platform guard and resolve the visitor themselves,
+which keeps anonymous and signed-in access on one code path.
+
+**A portal visitor is a `User` of type `CUSTOMER`** linked to their `Contact`, not a
+second kind of account: sessions, refresh rotation, password rules and reset links are
+the ones the agent app already uses. Record visibility is narrowed before permissions
+are consulted — `ticketVisibilityFilter` gives a customer their own requests and nothing
+else, whatever a role grants — and the portal serves its own ticket projection, so an
+internal comment is excluded by the query rather than filtered out afterwards.
+
+**Every channel creates tickets through one path.** `TicketsService.createTicket` owns
+the ticket number, the audit entry, assignment routing, the SLA clock and the
+`TICKET_CREATED` trigger; the agent UI, the portal and web forms all hand over to it, so
+a customer's request is routed and measured exactly like an agent's. A customer reply
+arrives as an inbound message authored by the contact, reopens a request that had been
+resolved, and fires `CUSTOMER_REPLIED` for automation to act on.
 
 ## 5a. File storage
 
