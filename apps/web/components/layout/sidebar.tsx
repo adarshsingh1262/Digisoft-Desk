@@ -109,7 +109,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phases 1–5 · helpdesk, operations, self-service, omnichannel
+          Phases 1–6 · helpdesk, operations, self-service, omnichannel, assistant
         </p>
       </aside>
     </>

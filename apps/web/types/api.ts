@@ -825,3 +825,95 @@ export interface ChatWidgetConfig {
   offlineMessage: string;
   requireEmail: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — AI assistance
+// ---------------------------------------------------------------------------
+
+export type AiProviderKindDto = 'ANTHROPIC' | 'HEURISTIC';
+export type AiInsightTypeDto = 'SUMMARY' | 'SENTIMENT' | 'INTENT' | 'SUGGESTED_REPLY' | 'KB_SUGGESTIONS';
+
+export interface AiSettingsDto {
+  id: string;
+  provider: AiProviderKindDto;
+  model: string;
+  isEnabled: boolean;
+  summaryEnabled: boolean;
+  sentimentEnabled: boolean;
+  intentEnabled: boolean;
+  suggestedReplyEnabled: boolean;
+  autoAnalyse: boolean;
+  monthlyTokenBudget: number;
+  promptGuidance: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  hasApiKey: boolean;
+}
+
+export interface AiSummaryContent {
+  text: string;
+  highlights: string[];
+}
+
+export interface AiSentimentContent {
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | 'FRUSTRATED';
+  score: number;
+  rationale: string;
+}
+
+export interface AiIntentContent {
+  intent: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  priorityId: string | null;
+  priorityName: string | null;
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  confidence: number;
+}
+
+export interface AiReplyContent {
+  text: string;
+  citedArticleIds: string[];
+  grounded: boolean;
+}
+
+export interface AiInsightDto {
+  id: string;
+  type: AiInsightTypeDto;
+  status: 'PENDING' | 'READY' | 'FAILED';
+  content: Partial<AiSummaryContent & AiSentimentContent & AiIntentContent & AiReplyContent>;
+  provider: AiProviderKindDto;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costMicros: number;
+  latencyMs: number;
+  error: string | null;
+  createdAt: string;
+  requestedBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface AiUsageDto {
+  month: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costMicros: number;
+  budgetTokens: number;
+  budgetUsedRatio: number | null;
+  byType: {
+    type: AiInsightTypeDto;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costMicros: number;
+  }[];
+}
+
+export interface AiArticleSuggestion {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string | null;
+  score: number;
+}

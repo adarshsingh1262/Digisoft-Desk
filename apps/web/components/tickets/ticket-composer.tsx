@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Paperclip, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { PERMISSIONS } from '@digisoft/shared';
 import { ApiError } from '@/lib/api-client';
 import { ticketsService } from '@/services/tickets.service';
 import { useAuthStore } from '@/stores/auth.store';
+import { useComposerStore } from '@/stores/composer.store';
 import { cn } from '@/lib/utils';
 import type { TicketAttachment } from '@/types/api';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,18 @@ export function TicketComposer({ ticketId }: { ticketId: string }) {
 
   const [mode, setMode] = useState<Mode>(canReply ? 'reply' : 'comment');
   const [body, setBody] = useState('');
+  const draft = useComposerStore((state) => state.draft);
+  const clearDraft = useComposerStore((state) => state.clearDraft);
+
+  // A suggested reply lands here as an ordinary draft the agent can edit or delete —
+  // it is never sent on their behalf.
+  useEffect(() => {
+    if (draft && draft.ticketId === ticketId) {
+      setBody(draft.body);
+      setMode('reply');
+      clearDraft();
+    }
+  }, [draft, ticketId, clearDraft]);
   const [pending, setPending] = useState<TicketAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
