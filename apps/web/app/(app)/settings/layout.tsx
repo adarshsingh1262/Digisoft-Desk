@@ -18,6 +18,8 @@ const TABS = [
     label: 'Ticket fields',
     permission: PERMISSIONS.TICKET_READ,
   },
+  { href: '/settings/help-center', label: 'Help center', permission: PERMISSIONS.PORTAL_READ },
+  { href: '/settings/web-forms', label: 'Web forms', permission: PERMISSIONS.PORTAL_READ },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

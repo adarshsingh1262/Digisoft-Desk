@@ -417,3 +417,268 @@ export interface TicketTransitions {
     requiredFields: string[];
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 — self-service
+// ---------------------------------------------------------------------------
+
+export interface KbCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  parentId: string | null;
+  visibility: ContentVisibilityDto;
+  position: number;
+  isActive: boolean;
+  _count: { articles: number };
+}
+
+export type ContentVisibilityDto = 'PUBLIC' | 'PORTAL_USERS' | 'AGENTS_ONLY';
+export type ArticleStatusDto = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'ARCHIVED';
+
+export interface KbArticleSummary {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string | null;
+  status: ArticleStatusDto;
+  visibility: ContentVisibilityDto;
+  position: number;
+  publishedAt: string | null;
+  viewCount: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  createdAt: string;
+  updatedAt: string;
+  category: { id: string; name: string; slug: string } | null;
+  author: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface KbArticle extends KbArticleSummary {
+  body: string;
+  keywords: string[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+}
+
+export interface KbArticleFeedback {
+  id: string;
+  isHelpful: boolean;
+  comment: string | null;
+  createdAt: string;
+  user: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface HelpCenter {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  welcomeMessage: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  supportEmail: string | null;
+  footerText: string | null;
+  isPublished: boolean;
+  allowPublicBrowsing: boolean;
+  allowSelfRegistration: boolean;
+  allowTicketSubmission: boolean;
+  kbEnabled: boolean;
+  communityEnabled: boolean;
+  moderateCommunity: boolean;
+}
+
+export interface WebFormFieldDto {
+  key: string;
+  label: string;
+  type: 'TEXT' | 'TEXTAREA' | 'EMAIL' | 'PHONE' | 'NUMBER' | 'SELECT' | 'CHECKBOX' | 'DATE';
+  required: boolean;
+  placeholder: string | null;
+  helpText: string | null;
+  options: string[];
+  mapsTo: 'subject' | 'description' | 'name' | 'email' | 'phone' | 'custom';
+}
+
+export interface WebForm {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  fields: WebFormFieldDto[];
+  submitLabel: string;
+  successMessage: string;
+  requireLogin: boolean;
+  isActive: boolean;
+  submissionCount: number;
+  department: { id: string; name: string } | null;
+  category: { id: string; name: string } | null;
+  priority: { id: string; name: string; color: string } | null;
+}
+
+export type TopicTypeDto = 'QUESTION' | 'DISCUSSION' | 'IDEA' | 'PROBLEM' | 'ANNOUNCEMENT';
+export type TopicStatusDto = 'OPEN' | 'ANSWERED' | 'CLOSED';
+export type ModerationStatusDto = 'PENDING' | 'PUBLISHED' | 'REJECTED';
+
+export interface CommunityCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  visibility: ContentVisibilityDto;
+  position: number;
+  isActive: boolean;
+  _count: { topics: number };
+}
+
+export interface CommunityAuthor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  type: 'AGENT' | 'CUSTOMER';
+}
+
+export interface CommunityTopic {
+  id: string;
+  title: string;
+  slug: string;
+  body: string;
+  type: TopicTypeDto;
+  status: TopicStatusDto;
+  moderation: ModerationStatusDto;
+  isPinned: boolean;
+  isLocked: boolean;
+  viewCount: number;
+  replyCount: number;
+  voteCount: number;
+  ticketId: string | null;
+  lastActivityAt: string;
+  createdAt: string;
+  category: { id: string; name: string; slug: string };
+  author: CommunityAuthor | null;
+}
+
+export interface CommunityReply {
+  id: string;
+  body: string;
+  moderation: ModerationStatusDto;
+  isAnswer: boolean;
+  voteCount: number;
+  createdAt: string;
+  author: CommunityAuthor | null;
+}
+
+export interface CommunityTopicDetail extends CommunityTopic {
+  replies: CommunityReply[];
+  votedTopic: boolean;
+  votedReplyIds: string[];
+}
+
+// Portal (customer-facing) shapes
+
+export interface PortalConfig {
+  slug: string;
+  name: string;
+  tagline: string | null;
+  welcomeMessage: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  supportEmail: string | null;
+  footerText: string | null;
+  allowSelfRegistration: boolean;
+  allowTicketSubmission: boolean;
+  kbEnabled: boolean;
+  communityEnabled: boolean;
+}
+
+export interface PortalCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  parentId: string | null;
+  position: number;
+  _count: { articles: number };
+}
+
+export interface PortalArticleCard {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string | null;
+  publishedAt: string | null;
+  viewCount: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  category: { id: string; name: string; slug: string } | null;
+}
+
+export interface PortalArticle extends PortalArticleCard {
+  body: string;
+  keywords: string[];
+  updatedAt: string;
+  related: PortalArticleCard[];
+  myFeedback: { isHelpful: boolean } | null;
+}
+
+export interface PortalForm {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  fields: WebFormFieldDto[];
+  submitLabel: string;
+  successMessage: string;
+  requireLogin: boolean;
+}
+
+export interface PortalTicketSummary {
+  id: string;
+  ticketNumber: number;
+  subject: string;
+  description: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  firstResponseDueAt: string | null;
+  resolutionDueAt: string | null;
+  status: { id: string; name: string; color: string; isResolved: boolean; isClosed: boolean };
+  priority: { id: string; name: string; color: string };
+  department: { id: string; name: string } | null;
+  category: { id: string; name: string } | null;
+  assignedAgent: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface PortalMessage {
+  id: string;
+  bodyText: string;
+  bodyHtml: string | null;
+  direction: 'INBOUND' | 'OUTBOUND';
+  createdAt: string;
+  authorUser: { id: string; firstName: string; lastName: string } | null;
+  authorContact: { id: string; firstName: string; lastName: string } | null;
+  attachments: { id: string; fileName: string; fileSize: number; mimeType: string }[];
+}
+
+export interface PortalTicket extends PortalTicketSummary {
+  messages: PortalMessage[];
+}
+
+export interface PortalProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  emailVerifiedAt: string | null;
+  contact: { id: string; phone: string | null; account: { id: string; name: string } | null } | null;
+}
+
+export interface PortalTicketOptions {
+  departments: { id: string; name: string }[];
+  categories: { id: string; name: string }[];
+  priorities: { id: string; name: string; color: string }[];
+}

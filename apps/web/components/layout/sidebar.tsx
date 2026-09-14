@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BookOpen,
   Building2,
   ClipboardList,
+  MessagesSquare,
   LayoutDashboard,
   Settings,
   Ticket,
@@ -35,6 +37,8 @@ const NAV: NavItem[] = [
   { href: '/activities', label: 'Activities', icon: ClipboardList, permission: PERMISSIONS.ACTIVITY_READ },
   { href: '/customers', label: 'Customers', icon: Users, permission: PERMISSIONS.CONTACT_READ },
   { href: '/accounts', label: 'Accounts', icon: Building2, permission: PERMISSIONS.ACCOUNT_READ },
+  { href: '/knowledge-base', label: 'Knowledge base', icon: BookOpen, permission: PERMISSIONS.KB_READ },
+  { href: '/community', label: 'Community', icon: MessagesSquare, permission: PERMISSIONS.COMMUNITY_MODERATE },
   { href: '/automation/rules', label: 'Automation', icon: Workflow, permission: PERMISSIONS.OPERATIONS_READ },
   { href: '/settings/organization', label: 'Settings', icon: Settings, permission: PERMISSIONS.ORGANIZATION_READ },
 ];
@@ -103,7 +107,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phases 1–3 · Foundation, helpdesk, operations
+          Phases 1–4 · Foundation, helpdesk, operations, self-service
         </p>
       </aside>
     </>
