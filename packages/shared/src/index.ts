@@ -11,4 +11,8 @@ export * from './account';
 export * from './ticket';
 export * from './rules';
 export * from './operations';
+export * from './slug';
+export * from './kb';
+export * from './portal';
+export * from './community';
 export * from './api';

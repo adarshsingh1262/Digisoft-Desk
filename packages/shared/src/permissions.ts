@@ -53,6 +53,17 @@ export const PERMISSIONS = {
   ACTIVITY_UPDATE: 'activity.update',
   ACTIVITY_DELETE: 'activity.delete',
 
+  KB_READ: 'kb.read',
+  /// Create, edit, publish and delete knowledge base categories and articles.
+  KB_MANAGE: 'kb.manage',
+
+  /// Help center settings and web forms.
+  PORTAL_READ: 'portal.read',
+  PORTAL_MANAGE: 'portal.manage',
+
+  /// Approve, reject, pin, lock and answer community content.
+  COMMUNITY_MODERATE: 'community.moderate',
+
   /// Assignment rules, automation rules, escalations, SLA policies and blueprints.
   OPERATIONS_READ: 'operations.read',
   OPERATIONS_MANAGE: 'operations.manage',
@@ -100,6 +111,10 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.ACTIVITY_UPDATE,
     PERMISSIONS.ACTIVITY_DELETE,
     PERMISSIONS.OPERATIONS_READ,
+    PERMISSIONS.KB_READ,
+    PERMISSIONS.KB_MANAGE,
+    PERMISSIONS.PORTAL_READ,
+    PERMISSIONS.COMMUNITY_MODERATE,
   ],
   /// Collaborators: they can read their departments' queues and comment internally,
   /// but never reply to a customer and never see the whole organization's tickets.
@@ -112,6 +127,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.TICKET_READ,
     PERMISSIONS.TICKET_COMMENT,
     PERMISSIONS.ACTIVITY_READ,
+    PERMISSIONS.KB_READ,
   ],
   CUSTOMER: [],
 };

@@ -65,6 +65,8 @@ export interface AuthenticatedUser {
   permissions: string[];
   /** Departments the user belongs to; narrows ticket visibility without `ticket.read.all`. */
   departmentIds: string[];
+  /** Set for portal users: the contact record their tickets belong to. */
+  contactId: string | null;
 }
 
 export interface LoginResponse {
