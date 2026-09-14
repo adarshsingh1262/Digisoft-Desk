@@ -1,4 +1,7 @@
-import { Worker, type Job } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
+import { AUTOMATION_QUEUE, SLA_QUEUE, SLA_SCAN_JOB, type EngineDeps, type TriggerJob } from '@digisoft/engine';
+import { handleAutomation } from './processors/automation.processor';
+import { handleSlaScan } from './processors/sla.processor';
 import { PrismaClient } from '@digisoft/db';
 import { Redis } from 'ioredis';
 import pino from 'pino';
@@ -16,6 +19,17 @@ const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const prisma = new PrismaClient();
 const emailProvider = createEmailProvider(env);
 
+const emailQueue = new Queue('email', { connection: connection.duplicate() });
+const automationQueue = new Queue<TriggerJob>(AUTOMATION_QUEUE, { connection: connection.duplicate() });
+const slaQueue = new Queue(SLA_QUEUE, { connection: connection.duplicate() });
+
+const engineDeps: EngineDeps = {
+  prisma,
+  redis: connection,
+  emailQueue,
+  log: (level, message, meta) => logger[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info'](meta ?? {}, message),
+};
+
 const emailWorker = new Worker<SendEmailJob>(
   'email',
   (job: Job<SendEmailJob>) => handleSendEmail(job, { emailProvider, logger }),
@@ -29,7 +43,28 @@ const notificationWorker = new Worker<DeliverNotificationJob>(
   { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
 );
 
-for (const worker of [emailWorker, notificationWorker]) {
+const automationWorker = new Worker<TriggerJob>(
+  AUTOMATION_QUEUE,
+  (job: Job<TriggerJob>) => handleAutomation(job, engineDeps),
+  { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
+);
+
+const slaWorker = new Worker(
+  SLA_QUEUE,
+  () => handleSlaScan(engineDeps, automationQueue),
+  // One sweep at a time: the scan is idempotent but there is no reason to overlap it.
+  { connection: connection.duplicate(), concurrency: 1 },
+);
+
+// A repeatable job keyed by name: adding it again on every boot is a no-op.
+void slaQueue.add(SLA_SCAN_JOB, {}, {
+  repeat: { every: env.SLA_SCAN_INTERVAL_SECONDS * 1000 },
+  jobId: 'sla-scan',
+  removeOnComplete: true,
+  removeOnFail: 10,
+});
+
+for (const worker of [emailWorker, notificationWorker, automationWorker, slaWorker]) {
   worker.on('failed', (job, error) => {
     logger.error(
       { queue: worker.name, jobId: job?.id, attempts: job?.attemptsMade },
@@ -45,7 +80,8 @@ logger.info(`Worker started (email provider: ${emailProvider.name})`);
 
 async function shutdown(signal: string): Promise<void> {
   logger.info(`Received ${signal}, draining queues`);
-  await Promise.all([emailWorker.close(), notificationWorker.close()]);
+  await Promise.all([emailWorker.close(), notificationWorker.close(), automationWorker.close(), slaWorker.close()]);
+  await Promise.all([emailQueue.close(), automationQueue.close(), slaQueue.close()]);
   await prisma.$disconnect();
   await connection.quit();
   process.exit(0);

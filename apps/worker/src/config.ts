@@ -10,6 +10,8 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
+  /** How often the SLA sweep runs. Warnings and breaches are detected to this resolution. */
+  SLA_SCAN_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
 
   EMAIL_PROVIDER: z.enum(['smtp', 'ses', 'console']).default('console'),
   EMAIL_FROM: z.string().default('Digisoft360 Help Desk <no-reply@digisoft360.local>'),
