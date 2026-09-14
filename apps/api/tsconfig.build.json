@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "rootDir": "./src" },
+  "compilerOptions": {
+    "rootDir": "./src",
+    // Incremental builds combined with nest's deleteOutDir can exit 0 while emitting
+    // nothing when a stale .tsbuildinfo outlives the deleted dist.
+    "incremental": false
+  },
   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.e2e-spec.ts"]
 }
