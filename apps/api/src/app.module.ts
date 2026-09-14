@@ -26,6 +26,10 @@ import { KbModule } from './kb/kb.module';
 import { HelpCenterModule } from './help-center/help-center.module';
 import { CommunityModule } from './community/community.module';
 import { PortalModule } from './portal/portal.module';
+import { ChannelsModule } from './channels/channels.module';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { ChatModule } from './chat/chat.module';
+import { ChannelOutboundModule } from './channels/channel-outbound.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
@@ -103,6 +107,10 @@ import { PermissionCatalogueService } from './bootstrap/permission-catalogue.ser
     HelpCenterModule,
     CommunityModule,
     PortalModule,
+    ChannelOutboundModule,
+    ChannelsModule,
+    IntegrationsModule,
+    ChatModule,
     NotificationsModule,
     HealthModule,
   ],

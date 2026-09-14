@@ -23,6 +23,11 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
 
+    // An API key was already resolved to its service user by the middleware.
+    if (request.apiKeyAuthenticated && request.user) {
+      return true;
+    }
+
     if (request.authError === 'expired') {
       throw AppError.unauthenticated('Access token has expired', 'TOKEN_EXPIRED');
     }

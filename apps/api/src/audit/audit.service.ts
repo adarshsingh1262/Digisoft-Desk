@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type ActorType, type Prisma } from '@digisoft/db';
+import { WEBHOOK_EVENTS, type WebhookEvent } from '@digisoft/shared';
 import { TENANT_PRISMA } from '../prisma/prisma.module';
 import type { TenantPrismaClient } from '@digisoft/db';
+import { WebhookDispatcherService } from '../integrations/webhook-dispatcher.service';
 
 export interface AuditEntry {
   organizationId: string;
@@ -29,7 +31,10 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(@Inject(TENANT_PRISMA) private readonly db: TenantPrismaClient) {}
+  constructor(
+    @Inject(TENANT_PRISMA) private readonly db: TenantPrismaClient,
+    private readonly webhooks: WebhookDispatcherService,
+  ) {}
 
   async record(entry: AuditEntry): Promise<void> {
     try {
@@ -51,6 +56,18 @@ export class AuditService {
         `Failed to write audit entry ${entry.action} for ${entry.entity}:${entry.entityId}`,
         error instanceof Error ? error.stack : String(error),
       );
+    }
+
+    // The audit action names and the webhook event names are deliberately the same
+    // vocabulary, so subscribing to an event needs no second list of hooks to maintain.
+    if ((WEBHOOK_EVENTS as readonly string[]).includes(entry.action)) {
+      await this.webhooks.dispatch(entry.organizationId, entry.action as WebhookEvent, {
+        entity: entry.entity,
+        entityId: entry.entityId,
+        actorId: entry.actorId ?? null,
+        actorType: entry.actorType ?? 'USER',
+        changes: { old: entry.oldValue ?? null, new: entry.newValue ?? null },
+      });
     }
   }
 }
