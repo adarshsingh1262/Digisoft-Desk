@@ -45,6 +45,8 @@ export async function createHarness(): Promise<Harness> {
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      attachments, ticket_links, ticket_followers, ticket_tags, ticket_messages,
+      tickets, tags, ticket_categories, ticket_priorities, ticket_statuses,
       audit_logs, notifications, verification_tokens, refresh_tokens,
       team_members, teams, user_departments, departments,
       user_roles, role_permissions, roles,
@@ -54,3 +56,37 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
 }
 
 export const apiPath = (path: string): string => `/api/v1${path}`;
+
+export interface SeededOrg {
+  token: string;
+  organizationId: string;
+  userId: string;
+  slug: string;
+}
+
+/** Registers an organization and returns a signed-in super admin for it. */
+export async function registerOrg(
+  http: import('node:http').Server,
+  slug: string,
+  email = `owner@${slug}.example`,
+): Promise<SeededOrg> {
+  const request = (await import('supertest')).default;
+  const response = await request(http)
+    .post(apiPath('/auth/register'))
+    .send({
+      organizationName: `${slug} Co`,
+      organizationSlug: slug,
+      firstName: 'Olive',
+      lastName: 'Owner',
+      email,
+      password: 'Str0ngPassword1',
+    })
+    .expect(201);
+
+  return {
+    token: response.body.data.accessToken as string,
+    organizationId: response.body.data.user.organizationId as string,
+    userId: response.body.data.user.id as string,
+    slug,
+  };
+}
