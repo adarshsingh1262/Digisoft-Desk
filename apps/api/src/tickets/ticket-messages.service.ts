@@ -13,6 +13,7 @@ import { MESSAGE_SELECT } from './ticket.select';
 import { canReadInternalNotes } from './ticket-visibility';
 import { EngineService } from '../engine/engine.service';
 import { ChannelOutboundService } from '../channels/channel-outbound.service';
+import { AiDispatchService } from '../ai/ai-dispatch.service';
 
 @Injectable()
 export class TicketMessagesService {
@@ -24,6 +25,7 @@ export class TicketMessagesService {
     private readonly audit: AuditService,
     private readonly engine: EngineService,
     private readonly outbound: ChannelOutboundService,
+    private readonly ai: AiDispatchService,
   ) {}
 
   async list(
@@ -193,6 +195,8 @@ export class TicketMessagesService {
       });
     }
     await this.engine.trigger(input.organizationId, input.ticketId, 'CUSTOMER_REPLIED');
+    // The thread changed, so the summary, sentiment and intent are stale.
+    await this.ai.analyse(input.organizationId, input.ticketId, 'CUSTOMER_REPLIED');
 
     return message;
   }

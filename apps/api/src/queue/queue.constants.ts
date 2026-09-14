@@ -5,6 +5,7 @@ export const QUEUE_NAMES = {
   SLA: 'sla',
   CHANNEL: 'channel',
   WEBHOOK: 'webhook',
+  AI: 'ai',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -13,6 +14,7 @@ export const EMAIL_JOB = 'send-email';
 export const NOTIFICATION_JOB = 'deliver-notification';
 export const CHANNEL_SEND_JOB = 'channel-send';
 export const WEBHOOK_DELIVER_JOB = 'webhook-deliver';
+export const AI_ANALYSE_JOB = 'ai-analyse';
 
 /** An agent reply leaving over the channel the ticket arrived on. */
 export interface ChannelSendJob {
@@ -27,6 +29,14 @@ export interface ChannelSendJob {
 export interface WebhookDeliveryJob {
   organizationId: string;
   deliveryId: string;
+}
+
+/** Automatic analysis of a ticket, out of the request path. */
+export interface AiAnalyseJob {
+  organizationId: string;
+  ticketId: string;
+  types?: ('SUMMARY' | 'SENTIMENT' | 'INTENT' | 'SUGGESTED_REPLY')[];
+  reason: 'TICKET_CREATED' | 'CUSTOMER_REPLIED' | 'MANUAL';
 }
 
 export interface SendEmailJob {

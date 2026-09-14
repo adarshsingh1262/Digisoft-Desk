@@ -41,7 +41,8 @@
     "@aws-sdk/s3-request-presigner": "^3.850.0",
     "multer": "^2.0.0",
     "@digisoft/engine": "workspace:*",
-    "@digisoft/channels": "workspace:*"
+    "@digisoft/channels": "workspace:*",
+    "@digisoft/ai": "workspace:*"
   },
   "devDependencies": {
     "@digisoft/tsconfig": "workspace:*",

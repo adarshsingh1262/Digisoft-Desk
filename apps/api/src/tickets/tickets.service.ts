@@ -22,6 +22,7 @@ import { TicketConfigService } from '../ticket-config/ticket-config.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TicketEventsService } from './ticket-events.service';
 import { EngineService } from '../engine/engine.service';
+import { AiDispatchService } from '../ai/ai-dispatch.service';
 import { TICKET_DETAIL_SELECT, TICKET_LIST_SELECT } from './ticket.select';
 import { ticketVisibilityFilter } from './ticket-visibility';
 
@@ -65,6 +66,7 @@ export class TicketsService {
     private readonly events: TicketEventsService,
     private readonly audit: AuditService,
     private readonly engine: EngineService,
+    private readonly ai: AiDispatchService,
   ) {}
 
   async list(actor: AuthenticatedUser, query: ListTicketsQuery): Promise<Paginated<unknown>> {
@@ -255,6 +257,7 @@ export class TicketsService {
     await this.engine.trigger(input.organizationId, ticket.id, 'TICKET_CREATED', {
       routedBy: routed?.ruleName ?? null,
     });
+    await this.ai.analyse(input.organizationId, ticket.id, 'TICKET_CREATED');
     return ticket;
   }
 
