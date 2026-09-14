@@ -13,11 +13,12 @@ import { TicketConversation } from '@/components/tickets/ticket-conversation';
 import { TicketComposer } from '@/components/tickets/ticket-composer';
 import { TicketDetailsPanel } from '@/components/tickets/ticket-details-panel';
 import { TicketHistory } from '@/components/tickets/ticket-history';
+import { TicketActivities } from '@/components/tickets/ticket-activities';
 import { StatusBadge, PriorityBadge } from '@/components/tickets/ticket-badges';
 import { Button } from '@/components/ui/button';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 
-type Tab = 'conversation' | 'history';
+type Tab = 'conversation' | 'activities' | 'history';
 
 /**
  * Three-pane agent workspace: queue on the left, conversation in the middle, ticket
@@ -125,7 +126,7 @@ export default function TicketWorkspacePage() {
           </div>
 
           <div role="tablist" aria-label="Ticket panels" className="mt-2 flex gap-1">
-            {(['conversation', 'history'] as const).map((key) => (
+            {(['conversation', 'activities', 'history'] as const).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -137,7 +138,7 @@ export default function TicketWorkspacePage() {
                   tab === key ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
-                {key === 'conversation' ? 'Conversation' : 'History'}
+                {key === 'conversation' ? 'Conversation' : key === 'activities' ? 'Activities' : 'History'}
               </button>
             ))}
           </div>
@@ -146,6 +147,8 @@ export default function TicketWorkspacePage() {
         <div className="flex-1 overflow-y-auto">
           {tab === 'conversation' ? (
             <TicketConversation ticket={data} />
+          ) : tab === 'activities' ? (
+            <TicketActivities ticket={data} />
           ) : (
             <TicketHistory ticketId={data.id} />
           )}

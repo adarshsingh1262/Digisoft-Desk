@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { formatDateTime } from '@/lib/utils';
 import { PageHeader } from '@/components/layout/page-header';
 import { NewTicketDialog } from '@/components/tickets/new-ticket-dialog';
-import { PriorityBadge, StatusBadge, TagChip } from '@/components/tickets/ticket-badges';
+import { PriorityBadge, SlaBadge, StatusBadge, TagChip } from '@/components/tickets/ticket-badges';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -236,7 +236,7 @@ export default function TicketsPage() {
                         : '—'}
                     </TD>
                     <TD>
-                      <StatusBadge status={ticket.status} />
+                      <div className="flex flex-wrap items-center gap-1"><StatusBadge status={ticket.status} /><SlaBadge ticket={ticket} /></div>
                     </TD>
                     <TD>
                       <PriorityBadge priority={ticket.priority} />

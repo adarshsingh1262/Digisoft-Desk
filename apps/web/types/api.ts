@@ -148,6 +148,7 @@ export interface TicketStatusConfig extends TicketStatusRef {
   systemKey: string | null;
   position: number;
   isDefault: boolean;
+  pausesSla: boolean;
   isSystem: boolean;
 }
 
@@ -182,7 +183,7 @@ export interface TagWithCount extends TagRef {
   _count: { tickets: number };
 }
 
-export interface TicketSummary {
+export interface TicketSummary extends SlaFields {
   id: string;
   ticketNumber: number;
   subject: string;
@@ -206,7 +207,6 @@ export interface TicketSummary {
 export interface TicketDetail extends Omit<TicketSummary, 'contact'> {
   description: string;
   resolutionNote: string | null;
-  firstResponseAt: string | null;
   customFields: Record<string, unknown> | null;
   mergedIntoTicketId: string | null;
   createdBy: { id: string; firstName: string; lastName: string } | null;
@@ -277,4 +277,143 @@ export interface TicketQueueSummary {
   assignedToMe: number;
   resolved: number;
   byStatus: { statusId: string; _count: { _all: number } }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — support operations
+// ---------------------------------------------------------------------------
+
+export interface SlaFields {
+  firstResponseAt: string | null;
+  firstResponseDueAt: string | null;
+  resolutionDueAt: string | null;
+  firstResponseBreachedAt: string | null;
+  resolutionBreachedAt: string | null;
+  slaPausedAt: string | null;
+  slaPolicy: { id: string; name: string } | null;
+}
+
+export interface Activity {
+  id: string;
+  type: 'TASK' | 'CALL' | 'EVENT';
+  status: 'OPEN' | 'COMPLETED' | 'CANCELLED';
+  subject: string;
+  description: string | null;
+  dueAt: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  completedAt: string | null;
+  callDirection: 'INBOUND' | 'OUTBOUND' | null;
+  callDurationSeconds: number | null;
+  callOutcome: string | null;
+  location: string | null;
+  createdAt: string;
+  updatedAt: string;
+  ticket: { id: string; ticketNumber: number; subject: string } | null;
+  contact: { id: string; firstName: string; lastName: string | null } | null;
+  account: { id: string; name: string } | null;
+  assignedTo: { id: string; firstName: string; lastName: string } | null;
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface ConditionLeafDto {
+  field: string;
+  op: string;
+  value?: string | number | boolean | string[] | null;
+}
+export interface ConditionTreeDto {
+  all: ConditionLeafDto[];
+  any: ConditionLeafDto[];
+}
+
+export interface AssignmentRule {
+  id: string;
+  name: string;
+  isActive: boolean;
+  position: number;
+  conditions: ConditionTreeDto;
+  strategy: 'SPECIFIC_AGENT' | 'DEPARTMENT' | 'ROUND_ROBIN' | 'LEAST_LOADED';
+  departmentId: string | null;
+  teamId: string | null;
+  agentId: string | null;
+  department: { id: string; name: string } | null;
+  team: { id: string; name: string } | null;
+  agent: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  position: number;
+  trigger: string;
+  conditions: ConditionTreeDto;
+  actions: Record<string, unknown>[];
+  runCount: number;
+  lastRunAt: string | null;
+  createdAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  trigger: string;
+  matched: boolean;
+  actionsApplied: { outcomes?: { type: string; ok: boolean; detail?: string }[] } | null;
+  error: string | null;
+  createdAt: string;
+  rule: { id: string; name: string };
+  ticket: { id: string; ticketNumber: number; subject: string } | null;
+}
+
+export interface SlaPolicy {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  position: number;
+  conditions: ConditionTreeDto;
+  businessHoursId: string | null;
+  warningMinutesBefore: number;
+  businessHours: { id: string; name: string; timezone: string } | null;
+  targets: {
+    id: string;
+    priorityId: string | null;
+    firstResponseMinutes: number;
+    resolutionMinutes: number;
+    useBusinessHours: boolean;
+    priority: { id: string; name: string } | null;
+  }[];
+  _count: { tickets: number };
+}
+
+export interface Blueprint {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  position: number;
+  conditions: ConditionTreeDto;
+  transitions: {
+    id: string;
+    name: string;
+    fromStatusId: string | null;
+    toStatusId: string;
+    requiredFields: string[];
+    allowedRoleIds: string[];
+    fromStatus: { id: string; name: string; color: string } | null;
+    toStatus: { id: string; name: string; color: string };
+  }[];
+}
+
+export interface TicketTransitions {
+  governed: boolean;
+  blueprint?: { id: string; name: string };
+  transitions: {
+    transitionId: string;
+    name: string;
+    toStatusId: string;
+    requiredFields: string[];
+  }[];
 }

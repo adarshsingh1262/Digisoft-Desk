@@ -215,13 +215,14 @@ export default function TicketFieldsSettingsPage() {
             ...(status.isDefault ? ['Default'] : []),
             ...(status.isResolved ? ['Resolves'] : []),
             ...(status.isClosed ? ['Closes'] : []),
+            ...(status.pausesSla ? ['Pauses SLA'] : []),
             ...(status.isSystem ? ['System'] : []),
           ],
           removable: !status.isDefault,
         }))}
         onCreate={(values) =>
           void run(
-            () => ticketConfigService.createStatus({ ...values, position: 99, isDefault: false, isResolved: false, isClosed: false }),
+            () => ticketConfigService.createStatus({ ...values, position: 99, isDefault: false, isResolved: false, isClosed: false, pausesSla: false }),
             ['ticket-statuses'],
             'Status created',
           )

@@ -26,6 +26,7 @@ import type {
   TicketQueueSummary,
   TicketStatusConfig,
   TicketSummary,
+  TicketTransitions,
 } from '@/types/api';
 
 export const ticketsService = {
@@ -59,6 +60,7 @@ export const ticketsService = {
   comment: (id: string, input: CreateMessageInput) =>
     apiPost<TicketMessage>(`/tickets/${id}/comments`, input),
   history: (id: string) => apiGetPaged<TicketHistoryEntry>(`/tickets/${id}/history`),
+  transitions: (id: string) => apiGet<TicketTransitions>(`/tickets/${id}/transitions`),
 
   attachments: (id: string) => apiGet<TicketAttachment[]>(`/tickets/${id}/attachments`),
   upload: async (id: string, file: File): Promise<TicketAttachment> => {

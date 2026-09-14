@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { PERMISSIONS } from '@digisoft/shared';
 import { ApiError } from '@/lib/api-client';
 import { ticketConfigService, ticketsService } from '@/services/tickets.service';
+import { SlaBadge } from './ticket-badges';
 import { departmentsService, usersService } from '@/services/settings.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { formatDateTime } from '@/lib/utils';
@@ -52,6 +53,11 @@ export function TicketDetailsPanel({ ticket }: { ticket: TicketDetail }) {
     enabled: can(PERMISSIONS.TICKET_ASSIGN),
   });
   const tags = useQuery({ queryKey: ['tags'], queryFn: ticketConfigService.tags });
+  // When a blueprint governs the ticket, only its transitions are offered.
+  const transitions = useQuery({
+    queryKey: ['ticket', ticket.id, 'transitions'],
+    queryFn: () => ticketsService.transitions(ticket.id),
+  });
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['ticket', ticket.id] });
@@ -166,12 +172,30 @@ export function TicketDetailsPanel({ ticket }: { ticket: TicketDetail }) {
               disabled={!canUpdate}
               onChange={(event) => setStatus.mutate(event.target.value)}
             >
-              {statuses.data?.map((status) => (
-                <option key={status.id} value={status.id}>
-                  {status.name}
-                </option>
-              ))}
+              <option value={ticket.status.id}>{ticket.status.name}</option>
+              {transitions.data?.governed
+                ? transitions.data.transitions.map((transition) => {
+                    const target = statuses.data?.find((status) => status.id === transition.toStatusId);
+                    return (
+                      <option key={transition.transitionId} value={transition.toStatusId}>
+                        {transition.name} → {target?.name ?? '…'}
+                        {transition.requiredFields.length > 0 ? ' *' : ''}
+                      </option>
+                    );
+                  })
+                : statuses.data
+                    ?.filter((status) => status.id !== ticket.status.id)
+                    .map((status) => (
+                      <option key={status.id} value={status.id}>
+                        {status.name}
+                      </option>
+                    ))}
             </Select>
+            {transitions.data?.governed ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Workflow: {transitions.data.blueprint?.name}. * needs fields first.
+              </p>
+            ) : null}
           </Row>
           <Row label="Priority">
             <Select
@@ -223,6 +247,33 @@ export function TicketDetailsPanel({ ticket }: { ticket: TicketDetail }) {
           <Row label="First reply">{formatDateTime(ticket.firstResponseAt)}</Row>
           <Row label="Resolved">{formatDateTime(ticket.resolvedAt)}</Row>
         </dl>
+      </section>
+
+      <section aria-label="SLA" className="space-y-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">SLA</h3>
+        {ticket.slaPolicy ? (
+          <dl className="space-y-1 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-muted-foreground">Policy</dt>
+              <dd className="flex items-center gap-2">{ticket.slaPolicy.name}<SlaBadge ticket={ticket} /></dd>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-muted-foreground">First response</dt>
+              <dd className={ticket.firstResponseBreachedAt && !ticket.firstResponseAt ? 'text-red-700 dark:text-red-400' : ''}>
+                {ticket.firstResponseAt ? `met ${formatDateTime(ticket.firstResponseAt)}` : `due ${formatDateTime(ticket.firstResponseDueAt)}`}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-muted-foreground">Resolution</dt>
+              <dd className={ticket.resolutionBreachedAt && !ticket.resolvedAt ? 'text-red-700 dark:text-red-400' : ''}>
+                {ticket.resolvedAt ? `met ${formatDateTime(ticket.resolvedAt)}` : `due ${formatDateTime(ticket.resolutionDueAt)}`}
+              </dd>
+            </div>
+            {ticket.slaPausedAt ? <p className="text-xs text-muted-foreground">Clock paused since {formatDateTime(ticket.slaPausedAt)} — this status waits on someone else.</p> : null}
+          </dl>
+        ) : (
+          <p className="text-sm text-muted-foreground">No policy applies to this ticket.</p>
+        )}
       </section>
 
       <section aria-label="Tags" className="space-y-2">
@@ -371,7 +422,18 @@ function useTicketMutation<T>(
       await refresh();
       toast.success(success);
     },
-    onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Unable to apply the change.'),
+    onError: (error) => {
+      const missing =
+        error instanceof ApiError && Array.isArray((error.details as { missingFields?: string[] } | undefined)?.missingFields)
+          ? ((error.details as { missingFields: string[] }).missingFields as string[])
+          : [];
+      toast.error(
+        error instanceof ApiError
+          ? missing.length > 0
+            ? `${error.message}: ${missing.join(', ')}`
+            : error.message
+          : 'Unable to apply the change.',
+      );
+    },
   });
 }

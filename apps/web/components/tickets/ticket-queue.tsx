@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { PageMeta } from '@digisoft/shared';
 import { cn, formatDateTime } from '@/lib/utils';
 import type { TicketSummary } from '@/types/api';
-import { PriorityBadge, StatusBadge, TagChip } from './ticket-badges';
+import { PriorityBadge, SlaBadge, StatusBadge, TagChip } from './ticket-badges';
 
 /** Compact list used as the left pane of the workspace. */
 export function TicketQueueList({
@@ -38,6 +38,7 @@ export function TicketQueueList({
             <p className="mt-0.5 truncate text-sm font-medium">{ticket.subject}</p>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <StatusBadge status={ticket.status} />
+              <SlaBadge ticket={ticket} />
               <span className="truncate text-xs text-muted-foreground">
                 {ticket.contact
                   ? `${ticket.contact.firstName} ${ticket.contact.lastName ?? ''}`.trim()

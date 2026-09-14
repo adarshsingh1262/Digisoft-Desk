@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Building2,
+  ClipboardList,
   LayoutDashboard,
   Settings,
   Ticket,
   Users,
+  Workflow,
   X,
 } from 'lucide-react';
 import { PERMISSIONS } from '@digisoft/shared';
@@ -30,8 +32,10 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tickets', label: 'Tickets', icon: Ticket, permission: PERMISSIONS.TICKET_READ },
+  { href: '/activities', label: 'Activities', icon: ClipboardList, permission: PERMISSIONS.ACTIVITY_READ },
   { href: '/customers', label: 'Customers', icon: Users, permission: PERMISSIONS.CONTACT_READ },
   { href: '/accounts', label: 'Accounts', icon: Building2, permission: PERMISSIONS.ACCOUNT_READ },
+  { href: '/automation/rules', label: 'Automation', icon: Workflow, permission: PERMISSIONS.OPERATIONS_READ },
   { href: '/settings/organization', label: 'Settings', icon: Settings, permission: PERMISSIONS.ORGANIZATION_READ },
 ];
 
@@ -99,7 +103,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phases 1–2 · Foundation and core helpdesk
+          Phases 1–3 · Foundation, helpdesk, operations
         </p>
       </aside>
     </>
