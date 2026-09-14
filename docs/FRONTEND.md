@@ -15,10 +15,10 @@ Three route groups with separate layouts and separate auth expectations.
 /community  /community/[id]                                   (categories in a dialog)
 /reports  /reports/[reportId]
 /automation/rules  /automation/assignment  /automation/sla  /automation/blueprints
-/channels  /channels/[id]
+/chat                                                         live chat inbox
 /ai
-/settings/{organization,users,roles,departments,teams,statuses,priorities,
-          categories,tags,business-hours,web-forms,webhooks,notifications}
+/settings/{organization,users,roles,departments,teams,ticket-fields,help-center,
+          web-forms,channels,webhooks,api-keys}
 ```
 
 ## `(portal)` — the help center, one route group for every tenant (built)

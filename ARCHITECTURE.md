@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Architecture
 
-> Status: **Phases 1–4 implemented.** Sections describing later phases are marked as planned.
+> Status: **Phases 1–5 implemented.** Sections describing later phases are marked as planned.
 
 ## 1. Final architecture
 
@@ -73,12 +73,15 @@ Digisoft-Desk/
 │   │   │   ├── help-center/      # portal settings and web forms (agent side)
 │   │   │   ├── community/        # community moderation (agent side)
 │   │   │   ├── portal/           # the customer-facing help center: content, accounts, requests, community
-│   │   │   └── (channels, ai, analytics … arrive in later phases)
+│   │   │   ├── channels/         # channel config, inbound webhooks, the ingestion pipeline, outbound
+│   │   │   ├── chat/             # live chat sessions, visitor socket, agent inbox
+│   │   │   ├── integrations/     # outbound webhooks and API keys
+│   │   │   └── (ai, analytics … arrive in later phases)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
 │   ├── worker/                   # BullMQ consumers; no HTTP surface
-│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla
+│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook
 │   │   └── Dockerfile
 │   │
 │   └── web/                      # Next.js App Router
@@ -91,6 +94,7 @@ Digisoft-Desk/
 │
 ├── packages/
 │   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
+│   ├── channels/                 # channel adapters (verify, parse, send) + credential encryption
 │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
 │   ├── shared/                   # Zod schemas + types shared by frontend and backend
 │   └── tsconfig/                 # strict TypeScript bases
@@ -207,6 +211,41 @@ the ticket number, the audit entry, assignment routing, the SLA clock and the
 a customer's request is routed and measured exactly like an agent's. A customer reply
 arrives as an inbound message authored by the contact, reopens a request that had been
 resolved, and fires `CUSTOMER_REPLIED` for automation to act on.
+
+## 5d. The channel pipeline
+
+`packages/channels` holds the adapters and knows nothing about tickets: each one
+verifies a provider's signature over the raw request bytes, parses its payload into a
+common `InboundMessage`, and — where the provider supports it — sends. That keeps
+protocol quirks (Mailgun's timestamped HMAC, Meta's `hub.challenge`, Twilio's
+URL-plus-parameters signature) in one small, unit-tested place.
+
+Everything a channel must agree on lives in the API's ingestion service instead:
+
+1. **Dedupe first.** The delivery is written as a `ChannelEvent` keyed by the provider's
+   message id; losing that insert means it is a redelivery, and nothing else runs.
+2. **Ignore machines.** Auto-replies, bounces and list mail are recorded and dropped,
+   which is what stops two auto-responders from talking to each other.
+3. **Identity.** A `ChannelIdentity` maps the sender to a contact, reusing a contact that
+   already has that email address, and creating one only when nobody matches.
+4. **Threading.** A stored message id, then the ticket number in the subject, then — for
+   conversational channels — the contact's open ticket from the last day.
+5. **The ticket.** New conversations go through `TicketsService.createTicket`, the same
+   path the agent UI, the portal and web forms use, so routing, SLA and automation apply
+   identically. Replies go through the same inbound path as the portal, so a customer
+   reply reopens a resolved ticket and fires `CUSTOMER_REPLIED` whatever channel it came
+   from.
+
+Outbound is the mirror image and runs in the worker: an agent's public reply on a ticket
+that arrived on a channel is queued, sent by that channel's adapter (or, for email, by
+the deployment's mail provider with `Message-ID`, `In-Reply-To` and `References` so the
+customer's answer threads back), and the provider's id is written onto the stored
+message. Live chat is delivered over Redis to the visitor's socket rather than an
+external API — the same publish-and-fan-out shape, without a third party.
+
+Credentials never leave the API: they are encrypted with AES-256-GCM under
+`CHANNEL_ENCRYPTION_KEY`, the REST layer returns only the *names* of the fields that
+hold a value, and the worker decrypts with the same key when it sends.
 
 ## 5a. File storage
 

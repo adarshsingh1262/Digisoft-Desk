@@ -97,3 +97,15 @@ Phase 4 introduced no new environment variables. The customer portal is served b
 same Next.js deployment (`/help/<slug>`) and the same API (`/api/v1/portal/<slug>/…`),
 so `FRONTEND_URL` is what password-reset and verification links for customers are built
 from, and `CORS`/cookie settings are shared with the agent app.
+
+## Phase 5 — channels, webhooks and API keys
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CHANNEL_ENCRYPTION_KEY` | — | 32 bytes, base64 or hex (`openssl rand -base64 32`). Encrypts channel credentials at rest. Required before a channel can store credentials — there is deliberately no fallback key. The **worker needs the same value** to decrypt them when it sends. |
+| `PUBLIC_API_URL` | `BACKEND_URL` | Public base URL providers post webhooks to; it is what the generated webhook URL is built from. |
+| `WEBHOOK_MAX_ATTEMPTS` | `5` | Attempts per outbound webhook delivery before it is marked failed. Set on the worker. |
+
+Outbound email for an email channel uses the deployment's existing `EMAIL_PROVIDER`
+settings; the channel supplies the from-address, display name, reply-to and signature.
+

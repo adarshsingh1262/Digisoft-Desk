@@ -3,14 +3,16 @@
 A multi-tenant customer support platform: ticketing, SLA, automation, knowledge base,
 omnichannel and AI assistance.
 
-**Status: Phases 1–4 implemented.** Authentication, RBAC, organizations, users,
+**Status: Phases 1–5 implemented.** Authentication, RBAC, organizations, users,
 departments, teams, contacts, accounts, the full ticketing core — conversations,
 internal comments, attachments, history, the agent workspace — the operations layer —
 activities, assignment rules, an automation engine with escalations, SLA with business
 hours and a background sweep, blueprint workflows — and self-service: a branded help
 center per organization with a knowledge base, web forms, customer accounts, "my
-requests" and a moderated community. The other channels, AI and analytics are not built
-yet, and the UI does not pretend otherwise.
+requests" and a moderated community — and omnichannel: email in and out with real
+threading, live chat, WhatsApp, Instagram, Messenger, Telegram and telephony adapters,
+signed outbound webhooks and API keys. AI and analytics are not built yet, and the UI
+does not pretend otherwise.
 
 ```bash
 cp .env.example .env     # set the two JWT secrets
@@ -33,9 +35,10 @@ Then open http://localhost:3000. Full instructions in [SETUP.md](./SETUP.md).
 
 ```
 apps/api       NestJS API and Socket.IO gateway
-apps/worker    BullMQ consumers (email, notifications, automation, SLA sweep)
+apps/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks)
 apps/web       Next.js frontend
 packages/engine  Rule evaluation, actions, business-hours SLA math, assignment, blueprints
+packages/channels Channel adapters (verify, parse, send) and credential encryption
 packages/db    Prisma schema, migrations, seed, tenant-isolation extension
 packages/shared  Zod schemas and types shared by the frontend and backend
 ```
@@ -90,6 +93,23 @@ packages/shared  Zod schemas and types shared by the frontend and backend
   customer's request.
 - **Community**: categories, topics, replies, one-vote-per-person upvotes, accepted
   answers, and an optional moderation queue agents work from the agent app.
+- **Email as a real channel**: signed inbound webhooks (generic, Mailgun, Postmark) that
+  become tickets — contact resolved, attachments stored, quoted history trimmed,
+  auto-replies ignored — and outbound replies carrying `Message-ID`, `In-Reply-To` and
+  `References`, so the customer's answer threads back onto the same ticket.
+- **Live chat** with its own visitor socket: the conversation is a ticket from the first
+  line, agents pick it up from a chat inbox, and the reply reaches the widget instantly.
+- **Messaging and telephony adapters**: WhatsApp Cloud, Messenger, Instagram, Telegram
+  and Twilio, each verifying the provider's real signature scheme; a call arrives as a
+  logged call activity with its recording.
+- **Idempotent ingestion**: every delivery is stored before it is interpreted and keyed
+  by the provider's message id, so a redelivery changes nothing and a parser bug leaves
+  the evidence behind.
+- **Outbound webhooks** with per-endpoint signing keys, HMAC signatures over
+  `timestamp.body`, retries with backoff, a delivery log and replay.
+- **API keys** backed by their own service user and role, so an integration is
+  authorised, audited and attributed exactly like a person, and revoking one closes
+  every path at once.
 - **Background jobs and realtime**: a worker that sends email, runs automation and
   sweeps SLAs, and an authenticated Socket.IO gateway whose ticket events reach only
   the sockets entitled to that ticket.
@@ -99,9 +119,10 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | Suite | Count | Command |
 |---|---|---|
 | Engine unit (business hours, conditions, blueprints) | 24 | `pnpm --filter @digisoft/engine test` |
+| Channel adapters unit (signatures, parsing, threading hints, encryption) | 32 | `pnpm --filter @digisoft/channels test` |
 | API unit | 73 | `pnpm --filter @digisoft/api test` |
-| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community) | 115 | `pnpm --filter @digisoft/api test:e2e` |
-| Browser (register, customers, ticket workflow, automation and SLA, help center and community) | 15 | `pnpm --filter @digisoft/web test:e2e` |
+| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community, channels, chat, integrations) | 141 | `pnpm --filter @digisoft/api test:e2e` |
+| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat) | 18 | `pnpm --filter @digisoft/web test:e2e` |
 
 ## Documentation
 
@@ -118,6 +139,7 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | [docs/PHASE-2-PLAN.md](./docs/PHASE-2-PLAN.md) | Phase 2 scope, decisions and status |
 | [docs/PHASE-3-PLAN.md](./docs/PHASE-3-PLAN.md) | Phase 3 scope, decisions and status |
 | [docs/PHASE-4-PLAN.md](./docs/PHASE-4-PLAN.md) | Phase 4 scope, decisions and status |
+| [docs/PHASE-5-PLAN.md](./docs/PHASE-5-PLAN.md) | Phase 5 scope, decisions and status |
 
 ## Roadmap
 
@@ -125,6 +147,6 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 2. ~~**Core helpdesk** — tickets, statuses, priorities, assignment, conversations, internal comments, attachments, history, agent workspace~~ ✅
 3. ~~**Support operations** — activities, assignment rules, automation engine, SLA, escalation, blueprints~~ ✅
 4. ~~**Self-service** — knowledge base, help center, customer portal, web forms, community~~ ✅
-5. **Omnichannel** — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony
+5. ~~**Omnichannel** — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony~~ ✅
 6. **AI** — summary, sentiment, intent, suggested reply, KB-grounded answers; pgvector/RAG later
 7. **Analytics** — dashboards, reports, agent performance, SLA reporting, CSAT

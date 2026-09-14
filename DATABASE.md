@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Data Model
 
-> Status: **Phases 1–4 are implemented and migrated.** Later-phase tables are planned
+> Status: **Phases 1–5 are implemented and migrated.** Later-phase tables are planned
 > shapes, not yet created.
 
 Schema, migrations and seed live in `packages/db`. The initial migration is
@@ -36,6 +36,10 @@ Organization (tenant root)
 ├── KbCategory ──< KbArticle ──< KbArticleFeedback
 ├── CommunityCategory ──< CommunityTopic ──< CommunityReply ──< CommunityVote
 ├── Channel (email/chat/whatsapp/... config, secrets encrypted)
+│   ├──< ChannelIdentity ──> Contact
+│   ├──< ChannelEvent (raw inbound payloads, dedupe + audit)
+│   └──< ChatSession ──> Ticket
+├── ApiKey ──> Role, User (service identity)
 ├── WebForm
 ├── Notification
 ├── WebhookEndpoint ──< WebhookDelivery
@@ -292,7 +296,32 @@ model AuditLog {
     topic's count in the same step.
   - Soft deletes release the slug (`…-deleted-<time>`), so an address can be used again
     after the row it belonged to is gone.
-- **Phase 5** — `Channel`, `EmailInbox`, `EmailMessageRef`, `ChatConversation`, `CallLog`, `WebhookEndpoint`, `WebhookDelivery`.
+- **Phase 5 (built)** — `Channel`, `ChannelIdentity`, `ChannelEvent`, `ChatSession`,
+  `WebhookEndpoint`, `WebhookDelivery`, `ApiKey`, plus `Ticket.channelId`,
+  `Activity.externalCallId` / `recordingUrl` and the enums `ChannelType`,
+  `ChannelEventStatus`, `ChatSessionStatus`, `DeliveryStatus`. Five decisions differ
+  from the sketch:
+  - **No `EmailInbox`, `EmailMessageRef`, `ChatConversation` or `CallLog`.** A
+    conversation is a `Ticket` whatever brought it in, its messages are `TicketMessage`
+    rows carrying the provider's id in `externalMessageId` (already unique per
+    organization, which is what threading matches on), and a call is an `Activity` of
+    type `CALL` with its recording. Four tables of near-duplicates would have meant four
+    places to keep the conversation rules correct.
+  - **`ChannelEvent` stores the raw delivery before it is interpreted.** Its unique
+    `(channelId, externalId)` is the idempotency key — a provider that redelivers
+    changes nothing — and it doubles as the audit trail and the answer to "why did that
+    email not become a ticket".
+  - **`ChatSession` holds only what a live visit adds**: the hashed visitor token, the
+    queue state, the page they were on and the rating. The conversation itself is the
+    ticket, so chat inherits SLA, automation and the workspace unchanged.
+  - **`ChannelIdentity` maps an external identity to a contact** (address, E.164 number,
+    page-scoped id, chat id), unique per organization and type. It is how a reply finds
+    the person, and how the same human writing from two channels stays one contact.
+  - **`ApiKey.userId` points at a service `User`.** A machine caller needs a real
+    identity or every ownership column and audit row would have to special-case it.
+- **Phase 5 (planned, not built)** — a provider-agnostic outbound *email send* per
+  channel (today outbound email uses the deployment's configured provider) and IMAP
+  polling for mailboxes without a webhook relay.
 - **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
 - **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
 
@@ -327,6 +356,14 @@ owning service verifies first. `Permission` is a global catalogue by design.
 
 Every one of these is a composite index leading with `organizationId`:
 `Ticket(statusId)`, `Ticket(priorityId)`, `Ticket(assignedAgentId, statusId)`, `Ticket(departmentId, statusId)`, `Ticket(contactId)`, `Ticket(accountId)`, `Ticket(createdAt)`, `Ticket(dueAt)` (partial: `WHERE "closedAt" IS NULL`), `TicketMessage(ticketId, createdAt)`, `Activity(ticketId)`, `AuditLog(entity, entityId, createdAt)`, `Contact(email)`, `Account(name)`.
+Phase 5 adds: `Channel(type, isActive)`, unique `Channel(organizationId, type,
+identifier)`, unique `ChannelEvent(channelId, externalId)`, `ChannelEvent(status,
+createdAt)`, unique `ChannelIdentity(organizationId, type, externalId)`,
+`ChatSession(status, lastSeenAt)`, `WebhookDelivery(endpointId, createdAt)`,
+`WebhookDelivery(status)`, unique `ApiKey.keyHash`, and unique
+`Activity(organizationId, externalCallId)` so a telephony provider can post the same
+call several times without duplicating it.
+
 Phase 4 adds: `KbArticle(status, visibility)`, `KbArticle(categoryId, position)`,
 `KbCategory(parentId, position)`, `WebForm(isActive)`, `CommunityTopic(categoryId,
 lastActivityAt)`, `CommunityTopic(moderation)`, `CommunityReply(topicId, createdAt)`,

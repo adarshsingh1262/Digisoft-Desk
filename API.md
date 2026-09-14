@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — API Reference and Plan
 
-> Status: endpoints marked **P1**–**P4** are **implemented and tested**. Everything else
+> Status: endpoints marked **P1**–**P5** are **implemented and tested**. Everything else
 > is planned for the phase noted beside it and is not reachable yet.
 
 Base path `/api/v1`. All responses use the envelope:
@@ -260,18 +260,105 @@ Anti-spam on public submissions: a honeypot field (`website`) — a filled one i
 as success and stored nowhere — plus the standard rate limiter (5 submissions/minute per
 IP, 10 sign-ins, 5 sign-ups).
 
-## Channels — P5
+## Channels — P5 (implemented)
+
+### Configuration (agent side)
 ```
-GET|POST /channels · /:id · POST /:id/test
-POST     /webhooks/email/:channelId        # @Public + signature verification
-POST     /webhooks/whatsapp/:channelId
-POST     /webhooks/meta/:channelId         # instagram + messenger
-POST     /webhooks/telegram/:channelId
-POST     /webhooks/telephony/:channelId
-GET|POST /calls · /calls/:id
-GET|POST /chat/conversations · /:id · POST /:id/convert-to-ticket
-GET|POST /webhook-endpoints · /:id · GET /:id/deliveries · POST /deliveries/:id/retry
+GET      /channels                    # ?type&isActive
+GET      /channels/catalogue          # providers per type + the credential fields each needs
+GET      /channels/events             # ?channelId&status — every inbound delivery and its outcome
+GET|POST /channels                    · GET|PATCH|DELETE /channels/:id
+POST     /channels/:id/rotate-webhook # new URL secret; the old URL stops working at once
+POST     /channels/:id/test           # a real send over the channel  { to, text? }
 ```
+`channel.read` to read, `channel.manage` to change. Types and adapters:
+
+| Type | Provider | Inbound | Outbound |
+|---|---|---|---|
+| `EMAIL` | `generic`, `mailgun`, `postmark` | webhook | through the deployment's mail provider, with threading headers |
+| `CHAT` | `native` | the portal's own chat endpoints | the visitor's socket |
+| `WHATSAPP` | `whatsapp_cloud` | webhook (`X-Hub-Signature-256`) | Cloud API |
+| `FACEBOOK` / `INSTAGRAM` | `meta` | webhook (`X-Hub-Signature-256` + `hub.challenge`) | Graph API |
+| `TELEGRAM` | `telegram` | webhook (`X-Telegram-Bot-Api-Secret-Token`) | Bot API |
+| `VOICE` | `twilio` | webhook (Twilio signature) → a logged call | — |
+
+Credentials are **write-only**: they are encrypted with `CHANNEL_ENCRYPTION_KEY` and the
+API returns only the *names* of the fields that hold a value (`configuredSecrets`).
+Sending a field again replaces it; sending `""` clears it; omitting it keeps it.
+
+### Inbound webhooks (public)
+```
+GET  /webhooks/:channelId/:secret     # subscription handshake (Meta products)
+POST /webhooks/:channelId/:secret     # one delivery
+```
+The URL secret is shown once, when the channel is created or its webhook is rotated; a
+wrong id and a wrong secret answer identically (404), so neither can be probed. The
+provider's own signature is then verified over the **raw** request bytes.
+
+Every delivery is stored as a `ChannelEvent` before it is interpreted, keyed by the
+provider's message id — so a redelivery answers `DUPLICATE` and changes nothing.
+Auto-replies, bounces and list mail are stored as `IGNORED` rather than answered.
+
+Threading, in order of confidence: `In-Reply-To`/`References` against a stored message
+id, then `[#number]` in the subject, then — for conversational channels only — the
+contact's own open ticket from the last 24 hours. Anything else starts a new ticket. A
+customer's inbound message reopens a resolved ticket and fires `CUSTOMER_REPLIED`.
+
+### Live chat
+```
+# Visitor (public, addressed by help center slug; the session token is the credential)
+GET  /portal/:slug/chat/config
+POST /portal/:slug/chat/start          # { name?, email?, message, pageUrl? } -> { token, session }
+GET  /portal/:slug/chat/session        # X-Chat-Token
+POST /portal/:slug/chat/messages       # X-Chat-Token  { body }
+POST /portal/:slug/chat/end            # X-Chat-Token  { rating? }
+
+# Agent
+GET  /chat/sessions                    # ?status=QUEUED|ACTIVE|ENDED
+GET  /chat/sessions/:id                # session + transcript
+POST /chat/sessions/:id/accept         # assigns the ticket to the agent
+POST /chat/sessions/:id/end
+```
+A chat is an ordinary ticket (`source: CHAT`) from the first message, so SLA, automation
+and the agent workspace apply to it. Agents answer through the normal ticket endpoints;
+the reply is pushed to the visitor's socket. Sockets: visitors connect to the `/chat`
+namespace with their session token and receive `chat.message` / `chat.ended`; agents
+receive `chat.started` on `/rt`.
+
+### Outbound webhooks
+```
+GET      /webhook-endpoints            · GET /webhook-endpoints/events
+GET|POST /webhook-endpoints            · PATCH|DELETE /webhook-endpoints/:id
+POST     /webhook-endpoints/:id/rotate-secret | /test
+GET      /webhook-deliveries           # ?endpointId&status&event
+POST     /webhook-deliveries/:id/replay
+```
+`webhook.read` / `webhook.manage`. Events are the audit action names —
+`ticket.created · ticket.updated · ticket.assigned · ticket.status_changed ·
+ticket.replied · ticket.customer_replied · ticket.resolved · ticket.closed ·
+contact.created · chat.started`; subscribing to none means all of them.
+
+Each delivery is signed with the endpoint's own secret:
+
+```
+X-Digisoft-Event: ticket.created
+X-Digisoft-Delivery: <delivery id>
+X-Digisoft-Timestamp: <unix seconds>
+X-Digisoft-Signature: t=<timestamp>,v1=<hex HMAC-SHA256 of "timestamp.body">
+```
+Body: `{ id, event, createdAt, data }`, where a ticket event's `data` carries the ticket
+itself. Failures are retried with exponential backoff up to `WEBHOOK_MAX_ATTEMPTS`,
+every attempt is recorded, and an operator can replay any delivery.
+
+### API keys
+```
+GET|POST /api-keys · DELETE /api-keys/:id     # apikey.manage
+```
+Send the key as `X-Api-Key`. Only its hash is stored, so it is shown exactly once, at
+creation. **Each key is backed by its own service user holding the role you choose**, so
+a machine caller is authorised by the same permission checks, appears in the audit trail
+and owns the records it creates. Revoking a key deactivates that user, closing every
+path in one step.
 
 ## AI — P6
 ```
