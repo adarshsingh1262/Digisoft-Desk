@@ -3,10 +3,11 @@
 A multi-tenant customer support platform: ticketing, SLA, automation, knowledge base,
 omnichannel and AI assistance.
 
-**Status: Phase 1 (Foundation) implemented.** Authentication, RBAC, organizations,
-users, departments, teams, contacts and accounts work end to end against the real API.
-Ticketing and everything after it are not built yet — the UI does not pretend
-otherwise.
+**Status: Phases 1–2 implemented.** Authentication, RBAC, organizations, users,
+departments, teams, contacts, accounts, and the full ticketing core — conversations,
+internal comments, attachments, history and the agent workspace — work end to end
+against the real API. SLA, automation, self-service and the other channels are not
+built yet, and the UI does not pretend otherwise.
 
 ```bash
 cp .env.example .env     # set the two JWT secrets
@@ -35,7 +36,7 @@ packages/db    Prisma schema, migrations, seed, tenant-isolation extension
 packages/shared  Zod schemas and types shared by the frontend and backend
 ```
 
-## What Phase 1 delivers
+## What is built
 
 - **Multi-tenancy** enforced in the data layer, not in callers: a Prisma client
   extension injects `organizationId` into every query and cross-tenant access returns
@@ -47,18 +48,30 @@ packages/shared  Zod schemas and types shared by the frontend and backend
   role takes effect immediately.
 - **Organizations, users, departments, teams, contacts, accounts** — full CRUD with
   validation, authorization, audit history and soft deletes.
-- **Agent console** with dashboard, customers, accounts and settings, wired to the real
-  API with loading, empty and error states throughout.
+- **Ticketing** with per-organization sequential numbering allocated inside the
+  creation transaction, configurable statuses and priorities (behaviour comes from
+  flags, never from a name), assignment, tags, merge, linking and following.
+- **Conversations** stored one row per message, with customer replies and internal
+  comments as distinct types. Internal comments are filtered out in the database query
+  for non-agents and are unmistakable in the UI.
+- **Attachments** with a MIME allowlist, size cap and filename sanitisation; metadata in
+  PostgreSQL and bytes in storage, behind two real providers (local filesystem, or any
+  S3-compatible bucket with signed URLs). Every download is re-authorised.
+- **Record-level ticket access**: `ticket.read.all` sees the whole queue; without it an
+  agent sees only their assignments, their departments and tickets they follow.
+- **Agent workspace**: three-pane queue / conversation / properties layout with saved
+  views, filters, search, quick actions and a history timeline.
 - **Background jobs and realtime**: a worker that sends transactional email, and an
-  authenticated Socket.IO gateway scoped to organization and user rooms.
+  authenticated Socket.IO gateway whose ticket events reach only the sockets entitled
+  to that ticket.
 
 ## Tests
 
 | Suite | Count | Command |
 |---|---|---|
-| API unit | 37 | `pnpm --filter @digisoft/api test` |
-| API integration (auth, tenant isolation, RBAC, rate limiting) | 27 | `pnpm --filter @digisoft/api test:e2e` |
-| Browser (register → sign in → create a customer) | 3 | `pnpm --filter @digisoft/web test:e2e` |
+| API unit | 53 | `pnpm --filter @digisoft/api test` |
+| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments) | 65 | `pnpm --filter @digisoft/api test:e2e` |
+| Browser (register, customers, and the full ticket workflow) | 6 | `pnpm --filter @digisoft/web test:e2e` |
 
 ## Documentation
 
@@ -72,11 +85,12 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Production topology and go-live checklist |
 | [docs/FRONTEND.md](./docs/FRONTEND.md) | Route plan and frontend conventions |
 | [docs/PHASE-1-PLAN.md](./docs/PHASE-1-PLAN.md) | Phase 1 scope and status |
+| [docs/PHASE-2-PLAN.md](./docs/PHASE-2-PLAN.md) | Phase 2 scope, decisions and status |
 
 ## Roadmap
 
 1. ~~**Foundation** — workspace, Docker, Prisma, auth, RBAC, organizations, users, departments, contacts, accounts~~ ✅
-2. **Core helpdesk** — tickets, statuses, priorities, assignment, conversations, internal comments, attachments, history, agent workspace
+2. ~~**Core helpdesk** — tickets, statuses, priorities, assignment, conversations, internal comments, attachments, history, agent workspace~~ ✅
 3. **Support operations** — activities, assignment rules, automation engine, SLA, escalation, blueprints
 4. **Self-service** — knowledge base, help center, customer portal, web forms, community
 5. **Omnichannel** — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony

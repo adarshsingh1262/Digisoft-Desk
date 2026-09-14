@@ -41,7 +41,7 @@ Never commit a real `.env`. It is in `.gitignore`.
 | Variable | Default | Notes |
 |---|---|---|
 | `THROTTLE_TTL_SECONDS` | `60` | Window for the default bucket |
-| `THROTTLE_LIMIT` | `120` | Requests per window per client |
+| `THROTTLE_LIMIT` | `300` | Requests per window per client. A single workspace navigation fans out to several endpoints, so this is a per-user-minute budget rather than a page-view count |
 | `AUTH_THROTTLE_LIMIT` | `10` | Ceiling for the `auth` bucket |
 | `THROTTLE_ENABLED` | `true` | Only the test harness sets this to `false` |
 
@@ -57,12 +57,21 @@ to Redis is required before running more than one instance behind a load balance
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` | Required when `EMAIL_PROVIDER=smtp` |
 | `AWS_REGION` | Required when `EMAIL_PROVIDER=ses`; credentials come from the standard AWS provider chain |
 
-## Object storage
+## Attachment storage
 
-Declared for Phase 2 attachments; nothing reads these yet.
+| Variable | Default | Notes |
+|---|---|---|
+| `STORAGE_PROVIDER` | `local` | `local` writes to disk and streams downloads back through the API; `s3` uses any S3-compatible bucket and hands out short-lived signed URLs |
+| `STORAGE_LOCAL_PATH` | `./storage` | Only used by the `local` provider. Put it on a persistent volume, or use `s3` for anything multi-instance |
+| `ATTACHMENT_MAX_BYTES` | `26214400` (25 MB) | Enforced by the service and again by the multipart parser |
+| `S3_BUCKET`, `S3_REGION` | — | Required when `STORAGE_PROVIDER=s3` |
+| `S3_ENDPOINT` | — | Set for MinIO or R2; omit for AWS |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | — | Omit to use the standard AWS provider chain |
+| `S3_FORCE_PATH_STYLE` | `true` | Needed by MinIO; AWS works either way |
+| `S3_SIGNED_URL_TTL_SECONDS` | `300` | How long a download link stays valid |
 
-`STORAGE_PROVIDER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`,
-`S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`.
+The `local` provider keeps files on one node's disk, so it suits development and
+single-node self-hosting. Anything running more than one API instance needs `s3`.
 
 ## Worker
 

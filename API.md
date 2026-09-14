@@ -71,28 +71,49 @@ GET             /accounts/:id/contacts
 GET             /accounts/:id/tickets        # P2
 ```
 
-## Tickets — P2
+## Tickets — P2 (implemented)
 ```
-GET|POST        /tickets
-GET|PATCH|DELETE /tickets/:id
-POST   /tickets/:id/assign            # { agentId?, departmentId? }
-POST   /tickets/:id/status
-POST   /tickets/:id/priority
-POST   /tickets/:id/resolve           # { resolutionNote }
+GET    /tickets                       # ?page&pageSize&q&sort&order plus the filters below
+GET    /tickets/summary               # counts behind the saved views
+GET    /tickets/:id
+POST   /tickets
+PATCH  /tickets/:id                   # only the fields sent are changed
+DELETE /tickets/:id                   # soft delete
+
+POST   /tickets/:id/assign            # { assignedAgentId?, departmentId? }
+POST   /tickets/:id/status            # { statusId, resolutionNote? }
+POST   /tickets/:id/priority          # { priorityId }
+POST   /tickets/:id/resolve           # { resolutionNote } — required
 POST   /tickets/:id/close
 POST   /tickets/:id/reopen
-POST   /tickets/:id/merge             # { targetTicketId }
-POST   /tickets/:id/links
+PATCH  /tickets/:id/tags              # { tagIds } replaces the set
+POST   /tickets/:id/merge             # { targetTicketId, comment? }
+POST   /tickets/:id/links             # { linkedTicketId, type }
+DELETE /tickets/:id/links/:linkId
 POST   /tickets/:id/follow | /unfollow
-GET|POST /tickets/:id/messages        # public reply
-POST   /tickets/:id/comments          # internal comment
-GET    /tickets/:id/history
-POST   /tickets/:id/attachments       # -> presigned PUT
-GET    /attachments/:id/download      # -> presigned GET, authz checked
-PATCH  /tickets/:id/tags
-POST   /tickets/bulk                  # bulk assign/status/priority/tag
-GET    /ticket-statuses | /ticket-priorities | /categories | /tags   (CRUD, admin)
+GET    /tickets/:id/history           # from the audit trail
+
+GET    /tickets/:id/messages          # internal comments filtered out for non-agents
+POST   /tickets/:id/messages          # public reply     (ticket.reply)
+POST   /tickets/:id/comments          # internal comment (ticket.comment)
+
+POST   /tickets/:id/attachments       # multipart upload, validated and stored
+GET    /tickets/:id/attachments
+GET    /attachments/:id/download      # streamed (local) or 302 to a signed URL (S3)
+DELETE /attachments/:id
+
+GET|POST         /ticket-statuses    · PATCH|DELETE /ticket-statuses/:id
+GET|POST         /ticket-priorities  · PATCH|DELETE /ticket-priorities/:id
+GET|POST         /ticket-categories  · PATCH|DELETE /ticket-categories/:id
+GET|POST         /tags               · DELETE       /tags/:id
 ```
+
+**List filters:** `statusId`, `priorityId`, `departmentId`, `assignedAgentId`, `categoryId`,
+`contactId`, `accountId`, `tagId`, `source`, plus the saved-view shortcuts `assignedToMe`,
+`unassigned` and `open` (neither resolved nor closed). `q` matches the subject, the
+description or a ticket number.
+
+**Not yet built:** `POST /tickets/bulk`.
 
 ## Activities, automation, SLA, blueprints — P3
 ```
@@ -183,9 +204,15 @@ Namespace `/rt`, authenticated on handshake with the access token. A socket join
 `org:{id}` and `org:{id}:user:{userId}` only, so a broadcast cannot cross a tenant
 boundary. Ticket and department rooms arrive with Phase 2.
 
-Implemented today: `notification.created`, `agent.online`, `agent.offline`. Background
-workers publish envelopes on the Redis channel `rt:emit`, which the API instances fan
-out to their own sockets.
+Implemented today: `ticket.created`, `ticket.updated`, `ticket.assigned`,
+`ticket.status_changed`, `message.created`, `notification.created`, `agent.online`,
+`agent.offline`.
+
+Ticket events are addressed to three rooms — the organization's full-queue room (joined
+only by sockets whose user holds `ticket.read.all`), the ticket's department room, and
+the assignee — so a socket is never sent an event for a ticket its user could not open
+through the API. Background workers publish envelopes on the Redis channel `rt:emit`,
+which the API instances fan out to their own sockets.
 
 ```
 server -> client: ticket.created · ticket.updated · ticket.assigned ·

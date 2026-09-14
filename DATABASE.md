@@ -1,7 +1,7 @@
 # Digisoft360 Help Desk — Data Model
 
-> Status: **Phase 1 tables are implemented and migrated.** Later-phase tables are
-> planned shapes, not yet created.
+> Status: **Phase 1 and Phase 2 tables are implemented and migrated.** Later-phase
+> tables are planned shapes, not yet created.
 
 Schema, migrations and seed live in `packages/db`. The initial migration is
 `packages/db/prisma/migrations/*_init`.
@@ -244,12 +244,28 @@ model AuditLog {
 
 ## 4. Later-phase tables (shape fixed now, migrated in their phase)
 
-- **Phase 2** — `Ticket` (with `ticketNumber Int` unique per org via a per-org counter row updated inside the ticket-creation transaction), `TicketStatus`, `TicketPriority`, `Category`, `Tag`, `TicketTag`, `TicketMessage` (`isInternal`, `channel`, `externalMessageId`, `inReplyTo`), `Attachment` (`storageKey`, never file bytes), `TicketHistory`, `TicketFollower`, `TicketLink`.
+- **Phase 2 (built)** — `Ticket`, `TicketStatus`, `TicketPriority`, `TicketCategory`,
+  `Tag`, `TicketTag`, `TicketMessage`, `Attachment`, `TicketFollower`, `TicketLink`.
+  Two decisions differ from the original sketch:
+  - `TicketMessage.type` is an enum (`PUBLIC_REPLY` / `INTERNAL_COMMENT` /
+    `SYSTEM_NOTE`) rather than an `isInternal` boolean, so system notes are a first
+    class kind instead of a third state squeezed into a flag.
+  - There is no separate `TicketHistory` table: `GET /tickets/:id/history` reads
+    `AuditLog` filtered to the ticket. One append-only trail is easier to keep correct
+    than two, and it already carries actor, action, old and new values.
 - **Phase 3** — `Activity`, `AutomationRule`, `AutomationRun`, `AssignmentRule`, `SlaPolicy`, `SlaTarget`, `SlaTimer` (`firstResponseDueAt`, `resolutionDueAt`, `pausedAt`, `pausedMs`, `breachedAt`), `EscalationRule`, `Blueprint`, `BlueprintTransition`.
 - **Phase 4** — `KbCategory`, `KbArticle` (tsvector column + GIN index), `KbArticleFeedback`, `WebForm`, `CommunityTopic`, `CommunityPost`, `CommunityVote`.
 - **Phase 5** — `Channel`, `EmailInbox`, `EmailMessageRef`, `ChatConversation`, `CallLog`, `WebhookEndpoint`, `WebhookDelivery`.
 - **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
 - **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
+
+## 4a. Ticket numbering
+
+`Ticket.ticketNumber` is sequential **per organization**, not global. The counter lives
+in `Organization.ticketSequence` and is bumped with an `increment` inside the same
+transaction that inserts the ticket, so the row lock serialises concurrent creates and
+no two tickets can share a number. `@@unique([organizationId, ticketNumber])` is the
+backstop, and a concurrency test asserts five simultaneous creates produce 1–5.
 
 ## 5. Isolation in the data layer
 

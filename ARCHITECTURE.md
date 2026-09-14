@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Architecture
 
-> Status: **Phase 1 implemented.** Sections describing later phases are marked as planned.
+> Status: **Phases 1–2 implemented.** Sections describing later phases are marked as planned.
 
 ## 1. Final architecture
 
@@ -59,11 +59,14 @@ Digisoft-Desk/
 │   │   │   ├── common/           # filters, interceptors, guards, decorators, pipes, middleware
 │   │   │   ├── config/           # Zod-validated environment
 │   │   │   ├── prisma/           # PrismaService + the tenant-scoped client provider
-│   │   │   ├── redis/  queue/  email/  realtime/  audit/  bootstrap/
+│   │   │   ├── redis/  queue/  email/  realtime/  audit/  bootstrap/  storage/
 │   │   │   ├── auth/             # login, refresh rotation, reset, invites, access control
 │   │   │   ├── organizations/  users/  roles/  departments/
 │   │   │   ├── contacts/  accounts/  notifications/  health/
-│   │   │   └── (tickets, sla, automation, … arrive in later phases)
+│   │   │   ├── tickets/          # queue, lifecycle, conversation, visibility, events
+│   │   │   ├── ticket-config/    # statuses, priorities, categories, tags
+│   │   │   ├── attachments/      # upload, authorised download, deletion
+│   │   │   └── (sla, automation, knowledge-base, … arrive in later phases)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
@@ -73,8 +76,8 @@ Digisoft-Desk/
 │   │
 │   └── web/                      # Next.js App Router
 │       ├── app/(auth)            # login, register, forgot-password, reset-password
-│       ├── app/(app)             # dashboard, customers, accounts, settings
-│       ├── components/{ui,layout,auth,customers,accounts,settings}
+│       ├── app/(app)             # dashboard, tickets, customers, accounts, settings
+│       ├── components/{ui,layout,auth,tickets,customers,accounts,settings}
 │       ├── hooks/ lib/ services/ stores/ types/ e2e/
 │       └── Dockerfile
 │
@@ -116,7 +119,11 @@ Customers (contacts) authenticate into the same org but with role `CUSTOMER`; th
 - Access token claims: `sub` (userId), `org` (organizationId), `role`, `perms` (permission-key array), `typ`.
 - Email verification and password reset use single-use hashed tokens in `VerificationToken` with TTL.
 - Logout revokes the refresh family and clears the cookie.
-- Socket.IO handshake authenticates with the access token; the socket joins `org:{orgId}`, `user:{userId}`, and role rooms. No global broadcasts (§43).
+- Socket.IO handshake authenticates with the access token, then resolves the user's
+  permissions and departments to decide room membership: `org:{orgId}`,
+  `org:{orgId}:user:{userId}`, one room per department, and `org:{orgId}:tickets:all`
+  only for users holding `ticket.read.all`. Ticket events are addressed to those rooms,
+  so the socket layer cannot leak a ticket the API would refuse. No global broadcasts (§43).
 
 **Authorization**
 - `PermissionsGuard` (global) + `@RequirePermissions('ticket.update')`. Public routes opt out with `@Public()`.
@@ -139,6 +146,23 @@ Customers (contacts) authenticate into the same org but with role `CUSTOMER`; th
 - `docker-compose.prod.yml` uses multi-stage builds (distroless runtime), no bind mounts, external managed Postgres/Redis/S3, and Nginx in front.
 - The local `postgres` service sits behind the `local-db` compose profile: supply a
   managed `DATABASE_URL` and run `docker compose up` without the profile to skip it.
+
+## 5a. File storage
+
+`StorageProvider` has two real implementations, chosen by `STORAGE_PROVIDER`:
+
+- **local** — writes under `STORAGE_LOCAL_PATH` and streams downloads back through the
+  API. Suits development and single-node self-hosting; the path is resolved once and
+  every key is checked to stay inside the root.
+- **s3** — any S3-compatible bucket, with downloads handed out as short-lived signed
+  URLs.
+
+Uploads are proxied through the API rather than presigned direct to the bucket. That
+keeps one validation and authorization path (size, MIME allowlist, tenant, ticket
+visibility) for both providers, and means the local provider is a real option rather
+than a stub. Storage keys are generated server-side as
+`{organizationId}/tickets/{ticketId}/{uuid}{ext}` and never derived from the uploaded
+filename.
 
 ## 6. Non-functional commitments
 

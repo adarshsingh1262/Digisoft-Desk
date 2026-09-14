@@ -93,6 +93,13 @@ Playwright at it instead of downloading one:
 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm --filter @digisoft/web test:e2e
 ```
 
+## Attachments in development
+
+`STORAGE_PROVIDER=local` (the default) writes uploads under `STORAGE_LOCAL_PATH`
+(`./storage`, gitignored) and streams downloads back through the API, so no object
+store is needed to work on ticketing. Switch to `STORAGE_PROVIDER=s3` with the MinIO
+service from Docker Compose, or a real bucket, when you want to exercise that path.
+
 ## Everyday commands
 
 ```bash
