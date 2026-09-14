@@ -63,6 +63,8 @@ export interface AuthenticatedUser {
   type: 'AGENT' | 'CUSTOMER';
   roles: string[];
   permissions: string[];
+  /** Departments the user belongs to; narrows ticket visibility without `ticket.read.all`. */
+  departmentIds: string[];
 }
 
 export interface LoginResponse {

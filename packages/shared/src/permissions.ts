@@ -30,6 +30,24 @@ export const PERMISSIONS = {
   ACCOUNT_UPDATE: 'account.update',
   ACCOUNT_DELETE: 'account.delete',
 
+  TICKET_READ: 'ticket.read',
+  /// Without this an agent sees only their own tickets and their departments' queues.
+  TICKET_READ_ALL: 'ticket.read.all',
+  TICKET_CREATE: 'ticket.create',
+  TICKET_UPDATE: 'ticket.update',
+  TICKET_DELETE: 'ticket.delete',
+  TICKET_ASSIGN: 'ticket.assign',
+  /// Post a customer-visible reply.
+  TICKET_REPLY: 'ticket.reply',
+  /// Post an internal comment the customer never sees.
+  TICKET_COMMENT: 'ticket.comment',
+  TICKET_MERGE: 'ticket.merge',
+  /// Manage statuses, priorities, categories and tags.
+  TICKET_CONFIG: 'ticket.config',
+
+  ATTACHMENT_CREATE: 'attachment.create',
+  ATTACHMENT_DELETE: 'attachment.delete',
+
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -60,13 +78,25 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.CONTACT_CREATE,
     PERMISSIONS.CONTACT_UPDATE,
     PERMISSIONS.ACCOUNT_READ,
+    PERMISSIONS.TICKET_READ,
+    PERMISSIONS.TICKET_READ_ALL,
+    PERMISSIONS.TICKET_CREATE,
+    PERMISSIONS.TICKET_UPDATE,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_REPLY,
+    PERMISSIONS.TICKET_COMMENT,
+    PERMISSIONS.ATTACHMENT_CREATE,
   ],
+  /// Collaborators: they can read their departments' queues and comment internally,
+  /// but never reply to a customer and never see the whole organization's tickets.
   LIGHT_AGENT: [
     PERMISSIONS.ORGANIZATION_READ,
     PERMISSIONS.USER_READ,
     PERMISSIONS.DEPARTMENT_READ,
     PERMISSIONS.CONTACT_READ,
     PERMISSIONS.ACCOUNT_READ,
+    PERMISSIONS.TICKET_READ,
+    PERMISSIONS.TICKET_COMMENT,
   ],
   CUSTOMER: [],
 };

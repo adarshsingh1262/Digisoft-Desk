@@ -8,4 +8,5 @@ export * from './user';
 export * from './department';
 export * from './contact';
 export * from './account';
+export * from './ticket';
 export * from './api';
