@@ -50,31 +50,40 @@ model Organization {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  users            User[]
-  roles            Role[]
-  departments      Department[]
-  teams            Team[]
-  contacts         Contact[]
-  accounts         Account[]
-  businessHours    BusinessHours[]
-  holidays         Holiday[]
-  auditLogs        AuditLog[]
-  refreshTokens    RefreshToken[]
-  notifications    Notification[]
-  ticketStatuses   TicketStatus[]
-  ticketPriorities TicketPriority[]
-  ticketCategories TicketCategory[]
-  tags             Tag[]
-  tickets          Ticket[]
-  ticketMessages   TicketMessage[]
-  attachments      Attachment[]
-  ticketLinks      TicketLink[]
-  activities       Activity[]
-  assignmentRules  AssignmentRule[]
-  automationRules  AutomationRule[]
-  automationRuns   AutomationRun[]
-  slaPolicies      SlaPolicy[]
-  blueprints       Blueprint[]
+  users               User[]
+  roles               Role[]
+  departments         Department[]
+  teams               Team[]
+  contacts            Contact[]
+  accounts            Account[]
+  businessHours       BusinessHours[]
+  holidays            Holiday[]
+  auditLogs           AuditLog[]
+  refreshTokens       RefreshToken[]
+  notifications       Notification[]
+  ticketStatuses      TicketStatus[]
+  ticketPriorities    TicketPriority[]
+  ticketCategories    TicketCategory[]
+  tags                Tag[]
+  tickets             Ticket[]
+  ticketMessages      TicketMessage[]
+  attachments         Attachment[]
+  ticketLinks         TicketLink[]
+  activities          Activity[]
+  assignmentRules     AssignmentRule[]
+  automationRules     AutomationRule[]
+  automationRuns      AutomationRun[]
+  slaPolicies         SlaPolicy[]
+  blueprints          Blueprint[]
+  helpCenter          HelpCenter?
+  kbCategories        KbCategory[]
+  kbArticles          KbArticle[]
+  kbArticleFeedback   KbArticleFeedback[]
+  webForms            WebForm[]
+  communityCategories CommunityCategory[]
+  communityTopics     CommunityTopic[]
+  communityReplies    CommunityReply[]
+  communityVotes      CommunityVote[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -150,6 +159,11 @@ model User {
   assignedActivities Activity[]          @relation("AssignedActivities")
   createdActivities  Activity[]          @relation("CreatedActivities")
   assignmentRules    AssignmentRule[]
+  articles           KbArticle[]         @relation("AuthoredArticles")
+  articleFeedback    KbArticleFeedback[]
+  topics             CommunityTopic[]    @relation("AuthoredTopics")
+  topicReplies       CommunityReply[]    @relation("AuthoredReplies")
+  communityVotes     CommunityVote[]
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -233,6 +247,7 @@ model Department {
   teams           Team[]
   tickets         Ticket[]
   assignmentRules AssignmentRule[]
+  webForms        WebForm[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -505,6 +520,7 @@ model TicketPriority {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tickets      Ticket[]
   slaTargets   SlaTarget[]
+  webForms     WebForm[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
@@ -526,6 +542,7 @@ model TicketCategory {
   parent       TicketCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children     TicketCategory[] @relation("CategoryHierarchy")
   tickets      Ticket[]
+  webForms     WebForm[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -586,20 +603,21 @@ model Ticket {
   updatedAt                 DateTime     @updatedAt
   deletedAt                 DateTime?
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  assignedAgent  User?           @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  createdBy      User?           @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: SetNull)
-  category       TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  status         TicketStatus    @relation(fields: [statusId], references: [id])
-  priority       TicketPriority  @relation(fields: [priorityId], references: [id])
-  mergedInto     Ticket?         @relation("TicketMerges", fields: [mergedIntoTicketId], references: [id], onDelete: SetNull)
-  mergedTickets  Ticket[]        @relation("TicketMerges")
-  slaPolicy      SlaPolicy?      @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
-  activities     Activity[]
-  automationRuns AutomationRun[]
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact         Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  account         Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  department      Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedAgent   User?            @relation("AssignedTickets", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdBy       User?            @relation("CreatedTickets", fields: [createdById], references: [id], onDelete: SetNull)
+  category        TicketCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status          TicketStatus     @relation(fields: [statusId], references: [id])
+  priority        TicketPriority   @relation(fields: [priorityId], references: [id])
+  mergedInto      Ticket?          @relation("TicketMerges", fields: [mergedIntoTicketId], references: [id], onDelete: SetNull)
+  mergedTickets   Ticket[]         @relation("TicketMerges")
+  slaPolicy       SlaPolicy?       @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
+  activities      Activity[]
+  automationRuns  AutomationRun[]
+  communityTopics CommunityTopic[]
 
   messages    TicketMessage[]
   attachments Attachment[]
@@ -965,4 +983,297 @@ model BlueprintTransition {
 
   @@index([blueprintId, fromStatusId])
   @@map("blueprint_transitions")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — self-service: help center, knowledge base, web forms, community.
+// ---------------------------------------------------------------------------
+
+enum ArticleStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Who may read a piece of self-service content. Enforced in the portal query layer,
+/// never by hiding links in the UI.
+enum ContentVisibility {
+  /// Anyone who can reach the help center, signed in or not.
+  PUBLIC
+  /// Signed-in portal users only.
+  PORTAL_USERS
+  /// Agents only; never served by a portal route.
+  AGENTS_ONLY
+}
+
+enum TopicType {
+  QUESTION
+  DISCUSSION
+  IDEA
+  PROBLEM
+  ANNOUNCEMENT
+}
+
+enum TopicStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+enum ModerationStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+/// One customer-facing site per organization: its address, branding and the switches
+/// that decide which self-service areas exist at all.
+model HelpCenter {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  /// Portal address segment, unique across the platform.
+  slug                  String   @unique
+  name                  String
+  tagline               String?
+  welcomeMessage        String?
+  logoUrl               String?
+  primaryColor          String   @default("#2563eb")
+  supportEmail          String?
+  footerText            String?
+  isPublished           Boolean  @default(true)
+  /// Anonymous visitors may read PUBLIC content. Off makes the whole portal private.
+  allowPublicBrowsing   Boolean  @default(true)
+  allowSelfRegistration Boolean  @default(true)
+  allowTicketSubmission Boolean  @default(true)
+  kbEnabled             Boolean  @default(true)
+  communityEnabled      Boolean  @default(true)
+  /// New topics and replies wait for an agent before they appear publicly.
+  moderateCommunity     Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("help_centers")
+}
+
+model KbCategory {
+  id             String            @id @default(cuid())
+  organizationId String
+  parentId       String?
+  name           String
+  slug           String
+  description    String?
+  icon           String?
+  visibility     ContentVisibility @default(PUBLIC)
+  position       Int               @default(0)
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       KbCategory?  @relation("KbCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     KbCategory[] @relation("KbCategoryTree")
+  articles     KbArticle[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, parentId, position])
+  @@index([organizationId, deletedAt])
+  @@map("kb_categories")
+}
+
+model KbArticle {
+  id              String            @id @default(cuid())
+  organizationId  String
+  categoryId      String?
+  title           String
+  slug            String
+  summary         String?
+  /// Markdown. Rendered without raw HTML so an article can never inject script.
+  body            String
+  status          ArticleStatus     @default(DRAFT)
+  visibility      ContentVisibility @default(PUBLIC)
+  authorId        String?
+  publishedAt     DateTime?
+  position        Int               @default(0)
+  keywords        String[]          @default([])
+  seoTitle        String?
+  seoDescription  String?
+  viewCount       Int               @default(0)
+  helpfulCount    Int               @default(0)
+  notHelpfulCount Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     KbCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author       User?               @relation("AuthoredArticles", fields: [authorId], references: [id], onDelete: SetNull)
+  feedback     KbArticleFeedback[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, visibility])
+  @@index([organizationId, categoryId, position])
+  @@index([organizationId, deletedAt])
+  @@map("kb_articles")
+}
+
+/// "Was this helpful?" — one vote per signed-in reader; anonymous votes are kept but
+/// not deduplicated, which is why `userId` is nullable.
+model KbArticleFeedback {
+  id             String   @id @default(cuid())
+  organizationId String
+  articleId      String
+  userId         String?
+  isHelpful      Boolean
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  article      KbArticle    @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([articleId, userId])
+  @@index([organizationId, articleId])
+  @@map("kb_article_feedback")
+}
+
+/// A public request form. `fields` holds the field definitions validated by the
+/// shared Zod schema; a submission becomes a ticket, never a free-floating record.
+model WebForm {
+  id              String    @id @default(cuid())
+  organizationId  String
+  name            String
+  slug            String
+  description     String?
+  departmentId    String?
+  categoryId      String?
+  priorityId      String?
+  /// [{ "key": "order_id", "label": "Order number", "type": "TEXT", ... }]
+  fields          Json      @default("[]")
+  submitLabel     String    @default("Submit request")
+  successMessage  String    @default("Thanks — we have received your request.")
+  requireLogin    Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  submissionCount Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  category     TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  priority     TicketPriority? @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, isActive])
+  @@index([organizationId, deletedAt])
+  @@map("web_forms")
+}
+
+model CommunityCategory {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  visibility     ContentVisibility @default(PUBLIC)
+  position       Int               @default(0)
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  topics       CommunityTopic[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, position])
+  @@index([organizationId, deletedAt])
+  @@map("community_categories")
+}
+
+model CommunityTopic {
+  id             String           @id @default(cuid())
+  organizationId String
+  categoryId     String
+  authorId       String?
+  title          String
+  slug           String
+  body           String
+  type           TopicType        @default(QUESTION)
+  status         TopicStatus      @default(OPEN)
+  moderation     ModerationStatus @default(PUBLISHED)
+  isPinned       Boolean          @default(false)
+  isLocked       Boolean          @default(false)
+  viewCount      Int              @default(0)
+  replyCount     Int              @default(0)
+  voteCount      Int              @default(0)
+  /// Set when an agent turns the topic into a support ticket.
+  ticketId       String?
+  lastActivityAt DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     CommunityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  author       User?             @relation("AuthoredTopics", fields: [authorId], references: [id], onDelete: SetNull)
+  ticket       Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  replies      CommunityReply[]
+  votes        CommunityVote[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, categoryId, lastActivityAt])
+  @@index([organizationId, moderation])
+  @@index([organizationId, deletedAt])
+  @@map("community_topics")
+}
+
+model CommunityReply {
+  id             String           @id @default(cuid())
+  organizationId String
+  topicId        String
+  authorId       String?
+  body           String
+  moderation     ModerationStatus @default(PUBLISHED)
+  /// Marked by the topic's author or an agent as the accepted answer.
+  isAnswer       Boolean          @default(false)
+  voteCount      Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  topic        CommunityTopic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  author       User?           @relation("AuthoredReplies", fields: [authorId], references: [id], onDelete: SetNull)
+  votes        CommunityVote[]
+
+  @@index([organizationId, topicId, createdAt])
+  @@index([organizationId, moderation])
+  @@index([organizationId, deletedAt])
+  @@map("community_replies")
+}
+
+/// One upvote per signed-in user per topic or reply; the counters on the parent rows
+/// are maintained in the same transaction as the vote.
+model CommunityVote {
+  id             String   @id @default(cuid())
+  organizationId String
+  topicId        String?
+  replyId        String?
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  topic        CommunityTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  reply        CommunityReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, userId])
+  @@unique([replyId, userId])
+  @@index([organizationId, userId])
+  @@map("community_votes")
 }

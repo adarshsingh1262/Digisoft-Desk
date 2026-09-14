@@ -8,6 +8,7 @@ import * as argon2 from 'argon2';
 import { SYSTEM_ROLES } from '@digisoft/shared';
 import { provisionSystemRoles, syncPermissionCatalogue } from '../src/role-provisioning';
 import { provisionSlaDefaults, provisionTicketDefaults } from '../src/ticket-provisioning';
+import { provisionHelpCenter } from '../src/portal-provisioning';
 
 const prisma = new PrismaClient();
 
@@ -122,6 +123,10 @@ async function main(): Promise<void> {
 
     await provisionTicketDefaults(tx, organization.id);
     await provisionSlaDefaults(tx, organization.id);
+    await provisionHelpCenter(tx, organization.id, {
+      name: DEMO.organizationName,
+      slug: DEMO.organizationSlug,
+    });
 
     await tx.contact.createMany({
       data: [
@@ -244,6 +249,17 @@ async function backfillTicketDefaults(): Promise<void> {
   for (const organization of withoutSla) {
     await prisma.$transaction((tx) => provisionSlaDefaults(tx, organization.id));
     console.log(`Provisioned the default SLA policy for "${organization.slug}".`);
+  }
+
+  const withoutHelpCenter = await prisma.organization.findMany({
+    where: { helpCenter: { is: null } },
+    select: { id: true, name: true, slug: true },
+  });
+  for (const organization of withoutHelpCenter) {
+    await prisma.$transaction((tx) =>
+      provisionHelpCenter(tx, organization.id, { name: organization.name, slug: organization.slug }),
+    );
+    console.log(`Provisioned the help center for "${organization.slug}".`);
   }
 }
 

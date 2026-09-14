@@ -7,3 +7,4 @@ export * from './tenant-context';
 export * from './tenant.extension';
 export * from './role-provisioning';
 export * from './ticket-provisioning';
+export * from './portal-provisioning';
