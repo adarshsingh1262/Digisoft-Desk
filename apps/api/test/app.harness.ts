@@ -52,6 +52,7 @@ export async function createHarness(): Promise<Harness> {
 export async function resetDatabase(prisma: PrismaClient, redis?: Redis): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      ai_insights, ai_settings,
       api_keys, webhook_deliveries, webhook_endpoints,
       chat_sessions, channel_events, channel_identities, channels,
       community_votes, community_replies, community_topics, community_categories,
