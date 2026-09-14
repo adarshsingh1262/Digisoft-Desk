@@ -1,0 +1,30 @@
+{
+  "name": "@digisoft/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"no worker tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@digisoft/shared": "workspace:*",
+    "bullmq": "^5.56.0",
+    "ioredis": "^5.7.0",
+    "nodemailer": "^7.0.5",
+    "pino": "^9.7.0",
+    "zod": "^4.6.5",
+    "@aws-sdk/client-sesv2": "^3.850.0",
+    "@digisoft/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@digisoft/tsconfig": "workspace:*",
+    "@types/node": "^22.15.0",
+    "@types/nodemailer": "^6.4.17",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,33 @@
+import { z } from 'zod';
+
+const bool = z
+  .union([z.boolean(), z.string()])
+  .transform((v) => (typeof v === 'boolean' ? v : v.toLowerCase() === 'true'));
+
+const schema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
+
+  EMAIL_PROVIDER: z.enum(['smtp', 'ses', 'console']).default('console'),
+  EMAIL_FROM: z.string().default('Digisoft360 Help Desk <no-reply@digisoft360.local>'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_SECURE: bool.default(false),
+  AWS_REGION: z.string().optional(),
+});
+
+export type WorkerEnv = z.infer<typeof schema>;
+
+export function loadEnv(): WorkerEnv {
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
+    throw new Error(`Invalid worker environment:\n${issues.join('\n')}`);
+  }
+  return parsed.data;
+}
