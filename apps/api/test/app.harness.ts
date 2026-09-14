@@ -10,6 +10,7 @@ import { REDIS_CLIENT } from '../src/redis/redis.module';
 export interface Harness {
   app: INestApplication;
   prisma: PrismaClient;
+  redis: Redis;
   close: () => Promise<void>;
 }
 
@@ -33,6 +34,7 @@ export async function createHarness(): Promise<Harness> {
   return {
     app,
     prisma,
+    redis,
     close: async () => {
       await app.close();
       await prisma.$disconnect();
@@ -41,10 +43,17 @@ export async function createHarness(): Promise<Harness> {
   };
 }
 
-/** Wipes every table between suites so each one starts from a known state. */
-export async function resetDatabase(prisma: PrismaClient): Promise<void> {
+/**
+ * Wipes every table between suites so each one starts from a known state. Pass the
+ * Redis client too when the suite exercises the portal: the help center is cached by
+ * slug, and a re-registered organization would otherwise be resolved to the id of the
+ * organization the previous test deleted.
+ */
+export async function resetDatabase(prisma: PrismaClient, redis?: Redis): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      community_votes, community_replies, community_topics, community_categories,
+      kb_article_feedback, kb_articles, kb_categories, web_forms, help_centers,
       activities, automation_runs, automation_rules, assignment_rules,
       blueprint_transitions, blueprints, sla_targets, sla_policies,
       attachments, ticket_links, ticket_followers, ticket_tags, ticket_messages,
@@ -55,6 +64,10 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
       contacts, accounts, holidays, business_hours, users, organizations
     RESTART IDENTITY CASCADE;
   `);
+
+  if (redis) {
+    await redis.flushdb();
+  }
 }
 
 export const apiPath = (path: string): string => `/api/v1${path}`;
