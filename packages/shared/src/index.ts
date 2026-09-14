@@ -15,4 +15,7 @@ export * from './slug';
 export * from './kb';
 export * from './portal';
 export * from './community';
+export * from './channels';
+export * from './chat';
+export * from './integrations';
 export * from './api';

@@ -68,6 +68,17 @@ export const PERMISSIONS = {
   OPERATIONS_READ: 'operations.read',
   OPERATIONS_MANAGE: 'operations.manage',
 
+  /// Channel configuration: email, chat, messaging and telephony.
+  CHANNEL_READ: 'channel.read',
+  CHANNEL_MANAGE: 'channel.manage',
+  /// Pick up and answer live chats.
+  CHAT_HANDLE: 'chat.handle',
+
+  /// Outbound webhooks and API keys.
+  WEBHOOK_READ: 'webhook.read',
+  WEBHOOK_MANAGE: 'webhook.manage',
+  APIKEY_MANAGE: 'apikey.manage',
+
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -115,6 +126,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.KB_MANAGE,
     PERMISSIONS.PORTAL_READ,
     PERMISSIONS.COMMUNITY_MODERATE,
+    PERMISSIONS.CHANNEL_READ,
+    PERMISSIONS.CHAT_HANDLE,
   ],
   /// Collaborators: they can read their departments' queues and comment internally,
   /// but never reply to a customer and never see the whole organization's tickets.
