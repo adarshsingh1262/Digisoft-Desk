@@ -91,6 +91,8 @@ model Organization {
   webhookEndpoints    WebhookEndpoint[]
   webhookDeliveries   WebhookDelivery[]
   apiKeys             ApiKey[]
+  aiSettings          AiSettings?
+  aiInsights          AiInsight[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -173,6 +175,7 @@ model User {
   communityVotes     CommunityVote[]
   apiKeys            ApiKey[]            @relation("ApiKeyIdentity")
   createdApiKeys     ApiKey[]            @relation("ApiKeyCreator")
+  aiInsights         AiInsight[]
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -636,6 +639,7 @@ model Ticket {
   automationRuns  AutomationRun[]
   communityTopics CommunityTopic[]
   chatSessions    ChatSession[]
+  aiInsights      AiInsight[]
 
   messages    TicketMessage[]
   attachments Attachment[]
@@ -1537,4 +1541,92 @@ model ApiKey {
 
   @@index([organizationId, revokedAt])
   @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — AI assistance: provider settings, generated insights and usage.
+// ---------------------------------------------------------------------------
+
+enum AiProviderKind {
+  /// Claude, through the official Anthropic SDK.
+  ANTHROPIC
+  /// Deterministic on-device analysis. No credentials, no network, no cost.
+  HEURISTIC
+}
+
+enum AiInsightType {
+  SUMMARY
+  SENTIMENT
+  INTENT
+  SUGGESTED_REPLY
+  KB_SUGGESTIONS
+}
+
+enum AiInsightStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// One AI configuration per organization. The API key is encrypted with the same
+/// key as channel credentials and never leaves the API.
+model AiSettings {
+  id                    String         @id @default(cuid())
+  organizationId        String         @unique
+  provider              AiProviderKind @default(HEURISTIC)
+  /// Provider model id, e.g. `claude-opus-5`.
+  model                 String         @default("claude-opus-5")
+  /// AES-256-GCM blob holding the provider credentials.
+  secrets               String?
+  isEnabled             Boolean        @default(false)
+  /// Individually switchable so an organization can adopt one feature at a time.
+  summaryEnabled        Boolean        @default(true)
+  sentimentEnabled      Boolean        @default(true)
+  intentEnabled         Boolean        @default(true)
+  suggestedReplyEnabled Boolean        @default(true)
+  /// Generate summary, sentiment and intent as tickets arrive, not only on demand.
+  autoAnalyse           Boolean        @default(true)
+  /// Hard ceiling on spend per calendar month; 0 means no limit.
+  monthlyTokenBudget    Int            @default(0)
+  /// Extra instructions folded into every prompt (tone, product names, languages).
+  promptGuidance        String?
+  lastCheckedAt         DateTime?
+  lastError             String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("ai_settings")
+}
+
+/// A generated insight. Kept per ticket and type so the newest supersedes the last
+/// without losing the trail, and so usage can be attributed and capped.
+model AiInsight {
+  id             String          @id @default(cuid())
+  organizationId String
+  ticketId       String
+  type           AiInsightType
+  status         AiInsightStatus @default(READY)
+  /// Shape depends on the type: { text }, { sentiment, score }, { categoryId, … }.
+  content        Json
+  provider       AiProviderKind
+  model          String
+  inputTokens    Int             @default(0)
+  outputTokens   Int             @default(0)
+  /// Estimated cost in ten-thousandths of a cent, so sub-cent calls stay exact.
+  costMicros     Int             @default(0)
+  latencyMs      Int             @default(0)
+  error          String?
+  /// Null when the worker generated it automatically.
+  requestedById  String?
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  requestedBy  User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, ticketId, type, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("ai_insights")
 }

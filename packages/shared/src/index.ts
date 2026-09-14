@@ -18,4 +18,5 @@ export * from './community';
 export * from './channels';
 export * from './chat';
 export * from './integrations';
+export * from './ai';
 export * from './api';

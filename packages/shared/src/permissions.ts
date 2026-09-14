@@ -79,6 +79,11 @@ export const PERMISSIONS = {
   WEBHOOK_MANAGE: 'webhook.manage',
   APIKEY_MANAGE: 'apikey.manage',
 
+  /// Ask the assistant for summaries, sentiment, intent and draft replies.
+  AI_USE: 'ai.use',
+  /// Configure the provider, the model, the budget and which features are on.
+  AI_MANAGE: 'ai.manage',
+
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -128,6 +133,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.COMMUNITY_MODERATE,
     PERMISSIONS.CHANNEL_READ,
     PERMISSIONS.CHAT_HANDLE,
+    PERMISSIONS.AI_USE,
   ],
   /// Collaborators: they can read their departments' queues and comment internally,
   /// but never reply to a customer and never see the whole organization's tickets.

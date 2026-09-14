@@ -48,6 +48,8 @@ export const TENANT_MODELS: ReadonlySet<string> = new Set([
   'WebhookEndpoint',
   'WebhookDelivery',
   'ApiKey',
+  'AiSettings',
+  'AiInsight',
 ]);
 
 /** Models with a `deletedAt` column that should be hidden from ordinary reads. */
