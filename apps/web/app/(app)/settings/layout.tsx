@@ -13,6 +13,11 @@ const TABS = [
   { href: '/settings/roles', label: 'Roles', permission: PERMISSIONS.ROLE_READ },
   { href: '/settings/departments', label: 'Departments', permission: PERMISSIONS.DEPARTMENT_READ },
   { href: '/settings/teams', label: 'Teams', permission: PERMISSIONS.TEAM_READ },
+  {
+    href: '/settings/ticket-fields',
+    label: 'Ticket fields',
+    permission: PERMISSIONS.TICKET_READ,
+  },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

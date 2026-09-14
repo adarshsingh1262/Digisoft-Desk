@@ -6,6 +6,7 @@ import { PERMISSIONS } from '@digisoft/shared';
 import { accountsService } from '@/services/accounts.service';
 import { contactsService } from '@/services/contacts.service';
 import { departmentsService, usersService } from '@/services/settings.service';
+import { ticketsService } from '@/services/tickets.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,11 @@ export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
   const can = useAuthStore((state) => state.can);
 
+  const tickets = useQuery({
+    queryKey: ['tickets', 'summary'],
+    queryFn: ticketsService.summary,
+    enabled: can(PERMISSIONS.TICKET_READ),
+  });
   const contacts = useQuery({
     queryKey: ['contacts', { pageSize: 1 }],
     queryFn: () => contactsService.list({ page: 1, pageSize: 1 }),
@@ -63,7 +69,7 @@ export default function DashboardPage() {
     enabled: can(PERMISSIONS.DEPARTMENT_READ),
   });
 
-  const failed = [contacts, accounts, users, departments].find((query) => query.isError);
+  const failed = [tickets, contacts, accounts, users, departments].find((query) => query.isError);
   if (failed?.error) {
     const message =
       failed.error instanceof ApiError ? failed.error.message : 'Unable to load the dashboard.';
@@ -76,6 +82,35 @@ export default function DashboardPage() {
         title={`Welcome back, ${user?.firstName ?? ''}`.trim()}
         description="Foundation modules currently available in this workspace."
       />
+
+      {can(PERMISSIONS.TICKET_READ) ? (
+        <section aria-label="Ticket queue" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Open tickets"
+            value={tickets.data?.open}
+            loading={tickets.isPending}
+            href="/tickets"
+          />
+          <StatCard
+            label="Assigned to me"
+            value={tickets.data?.assignedToMe}
+            loading={tickets.isPending}
+            href="/tickets"
+          />
+          <StatCard
+            label="Unassigned"
+            value={tickets.data?.unassigned}
+            loading={tickets.isPending}
+            href="/tickets"
+          />
+          <StatCard
+            label="Resolved"
+            value={tickets.data?.resolved}
+            loading={tickets.isPending}
+            href="/tickets"
+          />
+        </section>
+      ) : null}
 
       <section aria-label="Overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {can(PERMISSIONS.CONTACT_READ) ? (
@@ -101,15 +136,15 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle>Not built yet</CardTitle>
           <CardDescription>
-            Ticketing, SLA, automation, the knowledge base, omnichannel and analytics arrive in
-            later phases. Nothing above is placeholder data — every figure comes from the API.
+            SLA, automation, the knowledge base, omnichannel and analytics arrive in later phases.
+            Nothing above is placeholder data — every figure comes from the API.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           <ul className="list-inside list-disc space-y-1">
-            <li>Phase 2 — tickets, conversations, internal comments, attachments, agent workspace</li>
             <li>Phase 3 — activities, assignment rules, automation, SLA, escalation, blueprints</li>
             <li>Phase 4 — knowledge base, help center, customer portal, web forms, community</li>
+            <li>Phase 5 — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony</li>
           </ul>
         </CardContent>
       </Card>
