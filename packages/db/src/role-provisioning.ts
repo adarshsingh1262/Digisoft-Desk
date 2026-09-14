@@ -1,5 +1,10 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { ALL_PERMISSIONS, SYSTEM_ROLE_PERMISSIONS, SYSTEM_ROLES } from '@digisoft/shared';
+import {
+  ALL_PERMISSIONS,
+  SYSTEM_ROLE_PERMISSIONS,
+  SYSTEM_ROLES,
+  type SystemRoleKey,
+} from '@digisoft/shared';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -36,6 +41,55 @@ export async function syncPermissionCatalogue(db: Db): Promise<void> {
       update: { resource, action },
     });
   }
+}
+
+/**
+ * Brings every organization's system roles in line with SYSTEM_ROLE_PERMISSIONS.
+ *
+ * The permission catalogue grows as phases land, so roles created by an earlier
+ * release would otherwise never receive the new grants. System roles are not editable
+ * through the API, which is what makes reconciling them safe — a custom role an
+ * administrator built is never touched.
+ */
+export async function syncSystemRolePermissions(db: Db): Promise<number> {
+  const permissions = await db.permission.findMany({ select: { id: true, key: true } });
+  const permissionIdByKey = new Map(permissions.map((p) => [p.key, p.id]));
+
+  const roles = await db.role.findMany({
+    where: { isSystem: true, systemKey: { not: null } },
+    select: { id: true, systemKey: true, permissions: { select: { permissionId: true } } },
+  });
+
+  let changed = 0;
+  for (const role of roles) {
+    const desiredKeys = SYSTEM_ROLE_PERMISSIONS[role.systemKey as SystemRoleKey];
+    if (!desiredKeys) {
+      continue;
+    }
+    const desired = new Set(
+      desiredKeys.map((key) => permissionIdByKey.get(key)).filter((id): id is string => Boolean(id)),
+    );
+    const current = new Set(role.permissions.map((link) => link.permissionId));
+
+    const toAdd = [...desired].filter((id) => !current.has(id));
+    const toRemove = [...current].filter((id) => !desired.has(id));
+
+    if (toAdd.length > 0) {
+      await db.rolePermission.createMany({
+        data: toAdd.map((permissionId) => ({ roleId: role.id, permissionId })),
+        skipDuplicates: true,
+      });
+    }
+    if (toRemove.length > 0) {
+      await db.rolePermission.deleteMany({
+        where: { roleId: role.id, permissionId: { in: toRemove } },
+      });
+    }
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      changed += 1;
+    }
+  }
+  return changed;
 }
 
 /** Creates the five system roles for a freshly provisioned organization. */
