@@ -21,6 +21,11 @@ const schema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   SMTP_SECURE: bool.default(false),
   AWS_REGION: z.string().optional(),
+
+  /** Same key the API uses; required to decrypt channel credentials when sending. */
+  CHANNEL_ENCRYPTION_KEY: z.string().optional(),
+  /** Attempts per outbound webhook delivery before it is marked failed. */
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
 });
 
 export type WorkerEnv = z.infer<typeof schema>;

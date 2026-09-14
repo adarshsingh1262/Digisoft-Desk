@@ -8,6 +8,10 @@ export interface OutboundEmail {
   html: string;
   text: string;
   replyTo?: string;
+  /** Overrides the deployment default so a channel can answer from its own address. */
+  from?: string;
+  /** Threading headers (Message-ID, In-Reply-To, References) for channel replies. */
+  headers?: Record<string, string>;
 }
 
 export interface EmailProvider {
@@ -29,7 +33,15 @@ export function createEmailProvider(env: WorkerEnv): EmailProvider {
     return {
       name: 'smtp',
       async send(message) {
-        const info = await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
+        const info = await transporter.sendMail({
+          from: message.from ?? env.EMAIL_FROM,
+          to: message.to,
+          subject: message.subject,
+          html: message.html,
+          text: message.text,
+          replyTo: message.replyTo,
+          headers: message.headers,
+        });
         return info.messageId ?? null;
       },
     };
@@ -45,7 +57,7 @@ export function createEmailProvider(env: WorkerEnv): EmailProvider {
       async send(message) {
         const result = await client.send(
           new SendEmailCommand({
-            FromEmailAddress: env.EMAIL_FROM,
+            FromEmailAddress: message.from ?? env.EMAIL_FROM,
             Destination: { ToAddresses: [message.to] },
             ReplyToAddresses: message.replyTo ? [message.replyTo] : undefined,
             Content: {
@@ -68,9 +80,13 @@ export function createEmailProvider(env: WorkerEnv): EmailProvider {
     name: 'console',
     send(message) {
       process.stdout.write(
-        `[email] to=${message.to} subject=${JSON.stringify(message.subject)}\n${message.text}\n`,
+        `[email] from=${message.from ?? env.EMAIL_FROM} to=${message.to} subject=${JSON.stringify(
+          message.subject,
+        )}${message.headers ? ` headers=${JSON.stringify(message.headers)}` : ''}\n${message.text}\n`,
       );
-      return Promise.resolve(null);
+      // The console provider still returns the Message-ID the caller set, so threading
+      // can be exercised end to end without a mail server.
+      return Promise.resolve(message.headers?.['Message-ID'] ?? null);
     },
   };
 }

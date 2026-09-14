@@ -12,6 +12,8 @@ import {
   handleDeliverNotification,
   type DeliverNotificationJob,
 } from './processors/deliver-notification.processor';
+import { handleChannelSend, type ChannelSendJob } from './processors/channel-send.processor';
+import { handleWebhookDelivery, type WebhookDeliveryJob } from './processors/webhook.processor';
 
 const env = loadEnv();
 const logger = pino({ level: env.LOG_LEVEL, name: 'worker' });
@@ -49,6 +51,25 @@ const automationWorker = new Worker<TriggerJob>(
   { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
 );
 
+const channelWorker = new Worker<ChannelSendJob>(
+  'channel',
+  (job: Job<ChannelSendJob>) =>
+    handleChannelSend(job, {
+      prisma,
+      logger,
+      sendEmail: (message) => emailProvider.send(message),
+      encryptionKey: env.CHANNEL_ENCRYPTION_KEY,
+    }),
+  { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
+);
+
+const webhookWorker = new Worker<WebhookDeliveryJob>(
+  'webhook',
+  (job: Job<WebhookDeliveryJob>) =>
+    handleWebhookDelivery(job, { prisma, logger, maxAttempts: env.WEBHOOK_MAX_ATTEMPTS }),
+  { connection: connection.duplicate(), concurrency: env.WORKER_CONCURRENCY },
+);
+
 const slaWorker = new Worker(
   SLA_QUEUE,
   () => handleSlaScan(engineDeps, automationQueue),
@@ -64,7 +85,14 @@ void slaQueue.add(SLA_SCAN_JOB, {}, {
   removeOnFail: 10,
 });
 
-for (const worker of [emailWorker, notificationWorker, automationWorker, slaWorker]) {
+for (const worker of [
+  emailWorker,
+  notificationWorker,
+  automationWorker,
+  slaWorker,
+  channelWorker,
+  webhookWorker,
+]) {
   worker.on('failed', (job, error) => {
     logger.error(
       { queue: worker.name, jobId: job?.id, attempts: job?.attemptsMade },
