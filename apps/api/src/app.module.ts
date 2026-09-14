@@ -15,6 +15,10 @@ import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { ContactsModule } from './contacts/contacts.module';
+import { StorageModule } from './storage/storage.module';
+import { TicketConfigModule } from './ticket-config/ticket-config.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthModule } from './health/health.module';
@@ -81,6 +85,10 @@ import { PermissionCatalogueService } from './bootstrap/permission-catalogue.ser
     DepartmentsModule,
     ContactsModule,
     AccountsModule,
+    StorageModule,
+    TicketConfigModule,
+    TicketsModule,
+    AttachmentsModule,
     NotificationsModule,
     HealthModule,
   ],

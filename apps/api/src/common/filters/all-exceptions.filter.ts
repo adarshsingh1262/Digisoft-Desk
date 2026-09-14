@@ -80,6 +80,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        // The framework's own wording leaks its class name; say something a user can act on.
+        return {
+          status,
+          code: 'RATE_LIMITED',
+          message: 'Too many requests. Wait a moment and try again.',
+          logAsError: false,
+        };
+      }
       const res = exception.getResponse();
       const message =
         typeof res === 'string'

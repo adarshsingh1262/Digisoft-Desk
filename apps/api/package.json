@@ -36,7 +36,10 @@
     "socket.io": "^4.8.1",
     "zod": "^4.6.5",
     "@aws-sdk/client-sesv2": "^3.850.0",
-    "@digisoft/db": "workspace:*"
+    "@digisoft/db": "workspace:*",
+    "@aws-sdk/client-s3": "^3.850.0",
+    "@aws-sdk/s3-request-presigner": "^3.850.0",
+    "multer": "^2.0.0"
   },
   "devDependencies": {
     "@digisoft/tsconfig": "workspace:*",
@@ -54,6 +57,7 @@
     "supertest": "^7.1.1",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@types/multer": "^2.0.0"
   }
 }

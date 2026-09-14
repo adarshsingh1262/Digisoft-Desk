@@ -16,7 +16,11 @@ import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { AccessControlService } from './access-control.service';
 import { MailerService } from '../email/mailer.service';
-import { DEFAULT_BUSINESS_HOURS, provisionSystemRoles } from '@digisoft/db';
+import {
+  DEFAULT_BUSINESS_HOURS,
+  provisionSystemRoles,
+  provisionTicketDefaults,
+} from '@digisoft/db';
 
 export interface RequestMeta {
   ip: string | null;
@@ -92,6 +96,10 @@ export class AuthService {
           isDefault: true,
         },
       });
+
+      // Statuses, priorities and categories, so the organization can raise a ticket
+      // the moment registration finishes.
+      await provisionTicketDefaults(tx, organization.id);
 
       const user = await tx.user.create({
         data: {

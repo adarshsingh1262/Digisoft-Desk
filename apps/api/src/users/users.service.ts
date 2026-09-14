@@ -186,6 +186,9 @@ export class UsersService {
       }
     });
 
+    // Department membership decides which tickets the user may read, so the cached
+    // access scope has to go with it.
+    await this.accessControl.invalidateUser(actor.organizationId, id);
     await this.audit.record({
       organizationId: actor.organizationId,
       actorId: actor.id,
