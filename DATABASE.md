@@ -1,6 +1,10 @@
 # Digisoft360 Help Desk — Data Model
 
-> Status: **Planning deliverable (§70)**. Migrations not yet generated.
+> Status: **Phase 1 tables are implemented and migrated.** Later-phase tables are
+> planned shapes, not yet created.
+
+Schema, migrations and seed live in `packages/db`. The initial migration is
+`packages/db/prisma/migrations/*_init`.
 
 PostgreSQL 16 + Prisma. JSONB is used only where fields are genuinely user-configurable (custom fields, automation rule bodies, form schemas, audit diffs).
 
@@ -42,12 +46,15 @@ Organization (tenant root)
 - PK: `String @id @default(cuid())`.
 - Tenant column: `organizationId String` + `@@index([organizationId, ...])` on every query path.
 - Timestamps: `createdAt @default(now())`, `updatedAt @updatedAt`.
-- Soft delete: `deletedAt DateTime?` on `User`, `Contact`, `Account`, `Ticket`, `KbArticle`; the Prisma extension adds `deletedAt: null` to reads.
+- Soft delete: `deletedAt DateTime?` on `Organization`, `User`, `Department`, `Team`,
+  `Contact`, `Account` (and later `Ticket`, `KbArticle`). The Prisma extension adds
+  `deletedAt: null` to reads unless the caller filters on it explicitly, so a deleted
+  row can still be inspected or restored deliberately.
 - Enums are used only for values the *product* controls (`ChannelType`, `MessageType`, `ActivityType`). Ticket **status and priority are tables**, not enums (§15/§16) — the seeded rows are `NEW/OPEN/IN_PROGRESS/ON_HOLD/PENDING/RESOLVED/CLOSED` and `LOW/MEDIUM/HIGH/URGENT`, each with a `systemKey` plus `isDefault`, `isResolved`, `isClosed` behaviour flags so no code branches on the literal name.
 - Money/duration: minutes as `Int`; all timestamps `timestamptz`.
 - `customFields Json?` on `Ticket`, `Contact`, `Account`.
 
-## 3. Phase 1 schema (to be written to `apps/api/prisma/schema.prisma`)
+## 3. Phase 1 schema (`packages/db/prisma/schema.prisma`)
 
 ```prisma
 model Organization {
@@ -244,7 +251,26 @@ model AuditLog {
 - **Phase 6** — `AiInsight`, `AiProviderConfig`, `AiRequestLog` (+ `pgvector` extension and `KbArticleEmbedding` later).
 - **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
 
-## 5. Indexing plan (§49)
+## 5. Isolation in the data layer
+
+`packages/db/src/tenant.extension.ts` wraps every Prisma operation:
+
+- reads, updates and deletes against a tenant-owned model get `organizationId` merged
+  into `where` — a caller-supplied value is overwritten, never trusted;
+- creates get `organizationId` stamped onto the row;
+- with no tenant context the query throws rather than running unscoped (fail closed);
+- `TenantContext.runUnscoped()` is the only escape hatch, used by login lookup and
+  organization provisioning, and is grep-auditable.
+
+The rewriting logic is a pure function (`scopeArgs`) so the rules are unit tested
+directly, and the guarantee is tested again end to end in
+`apps/api/test/tenant-isolation.e2e-spec.ts`.
+
+Join tables (`UserRole`, `UserDepartment`, `TeamMember`, `RolePermission`) carry no
+`organizationId`; they are only reachable through a parent row whose ownership the
+owning service verifies first. `Permission` is a global catalogue by design.
+
+## 6. Indexing plan (§49)
 
 Every one of these is a composite index leading with `organizationId`:
 `Ticket(statusId)`, `Ticket(priorityId)`, `Ticket(assignedAgentId, statusId)`, `Ticket(departmentId, statusId)`, `Ticket(contactId)`, `Ticket(accountId)`, `Ticket(createdAt)`, `Ticket(dueAt)` (partial: `WHERE "closedAt" IS NULL`), `TicketMessage(ticketId, createdAt)`, `Activity(ticketId)`, `AuditLog(entity, entityId, createdAt)`, `Contact(email)`, `Account(name)`.

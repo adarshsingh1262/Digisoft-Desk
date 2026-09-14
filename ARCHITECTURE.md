@@ -1,6 +1,6 @@
 # Digisoft360 Help Desk — Architecture
 
-> Status: **Planning deliverable (§70)**. No application code has been implemented yet.
+> Status: **Phase 1 implemented.** Sections describing later phases are marked as planned.
 
 ## 1. Final architecture
 
@@ -47,89 +47,49 @@ Two separate deployable applications plus a worker process, sharing one PostgreS
 
 ## 2. Repository structure
 
+pnpm workspace. The frontend and backend stay independently deployable; only types and
+Zod schemas are shared, through a package with no Nest or React dependency.
+
 ```
 Digisoft-Desk/
 ├── apps/
-│   ├── api/                      # NestJS backend (HTTP + Socket.IO)
+│   ├── api/                      # NestJS API + Socket.IO gateway
 │   │   ├── src/
-│   │   │   ├── main.ts
-│   │   │   ├── app.module.ts
-│   │   │   ├── common/           # guards, interceptors, filters, decorators, pipes
-│   │   │   ├── config/           # Zod env schema, typed config
-│   │   │   ├── prisma/           # PrismaService + tenant-scoping extension
-│   │   │   ├── auth/
-│   │   │   ├── organizations/
-│   │   │   ├── users/
-│   │   │   ├── roles/
-│   │   │   ├── permissions/
-│   │   │   ├── departments/
-│   │   │   ├── teams/
-│   │   │   ├── contacts/
-│   │   │   ├── accounts/
-│   │   │   ├── tickets/          # phase 2
-│   │   │   ├── conversations/    # phase 2
-│   │   │   ├── attachments/      # phase 2
-│   │   │   ├── activities/       # phase 3
-│   │   │   ├── automation/       # phase 3
-│   │   │   ├── assignment-rules/ # phase 3
-│   │   │   ├── sla/              # phase 3
-│   │   │   ├── escalation/       # phase 3
-│   │   │   ├── blueprints/       # phase 3
-│   │   │   ├── knowledge-base/   # phase 4
-│   │   │   ├── help-center/      # phase 4
-│   │   │   ├── community/        # phase 4
-│   │   │   ├── web-forms/        # phase 4
-│   │   │   ├── channels/         # phase 5
-│   │   │   ├── email/            # phase 5
-│   │   │   ├── chat/             # phase 5
-│   │   │   ├── telephony/        # phase 5
-│   │   │   ├── ai/               # phase 6
-│   │   │   ├── reports/          # phase 7
-│   │   │   ├── csat/             # phase 7
-│   │   │   ├── notifications/
-│   │   │   ├── webhooks/
-│   │   │   ├── audit/
-│   │   │   ├── realtime/         # Socket.IO gateway + Redis adapter
-│   │   │   └── queue/            # BullMQ registration + producers
-│   │   ├── prisma/
-│   │   │   ├── schema.prisma
-│   │   │   ├── migrations/
-│   │   │   └── seed.ts
-│   │   ├── test/                 # e2e / integration (Testcontainers)
+│   │   │   ├── main.ts  app.module.ts
+│   │   │   ├── common/           # filters, interceptors, guards, decorators, pipes, middleware
+│   │   │   ├── config/           # Zod-validated environment
+│   │   │   ├── prisma/           # PrismaService + the tenant-scoped client provider
+│   │   │   ├── redis/  queue/  email/  realtime/  audit/  bootstrap/
+│   │   │   ├── auth/             # login, refresh rotation, reset, invites, access control
+│   │   │   ├── organizations/  users/  roles/  departments/
+│   │   │   ├── contacts/  accounts/  notifications/  health/
+│   │   │   └── (tickets, sla, automation, … arrive in later phases)
+│   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
-│   ├── worker/                   # BullMQ consumers; imports api modules, no HTTP
-│   │   ├── src/main.ts
-│   │   ├── src/processors/
+│   ├── worker/                   # BullMQ consumers; no HTTP surface
+│   │   ├── src/processors/       # send-email, deliver-notification
 │   │   └── Dockerfile
 │   │
-│   └── web/                      # Next.js frontend
-│       ├── app/
-│       │   ├── (auth)/login, register, forgot-password, reset-password
-│       │   ├── (app)/dashboard, tickets, activities, customers, accounts,
-│       │   │        knowledge-base, community, reports, automation,
-│       │   │        channels, ai, settings
-│       │   ├── (portal)/portal/...          # customer portal
-│       │   └── (public)/help/...            # SEO help center
-│       ├── components/{ui,layout,tickets,customers,dashboard,knowledge-base}
-│       ├── hooks/ lib/ services/ stores/ types/ utils/
-│       ├── middleware.ts
+│   └── web/                      # Next.js App Router
+│       ├── app/(auth)            # login, register, forgot-password, reset-password
+│       ├── app/(app)             # dashboard, customers, accounts, settings
+│       ├── components/{ui,layout,auth,customers,accounts,settings}
+│       ├── hooks/ lib/ services/ stores/ types/ e2e/
 │       └── Dockerfile
 │
 ├── packages/
-│   ├── shared/                   # Zod schemas + DTO types shared FE/BE
-│   └── tsconfig/                 # shared strict tsconfig bases
+│   ├── db/                       # Prisma schema, migrations, seed, tenant extension
+│   ├── shared/                   # Zod schemas + types shared by frontend and backend
+│   └── tsconfig/                 # strict TypeScript bases
 │
-├── docker/                       # nginx conf, init scripts
-├── docs/                         # PHASE-1-PLAN.md, decisions
-├── docker-compose.yml            # dev
-├── docker-compose.prod.yml
-├── .env.example
-├── ARCHITECTURE.md  DATABASE.md  API.md  SETUP.md  DEPLOYMENT.md  ENVIRONMENT.md
-└── pnpm-workspace.yaml
+├── docker-compose.yml  .env.example
+└── README.md ARCHITECTURE.md DATABASE.md API.md SETUP.md ENVIRONMENT.md DEPLOYMENT.md
 ```
 
-`packages/shared` contains **types and Zod schemas only** — no runtime dependency on Nest or React, so neither app pulls the other's dependency tree.
+**Why `packages/db` owns Prisma:** the API and the worker both need the generated
+client. Keeping the schema, migrations and generated client in one package means one
+schema, one client and one migration history rather than two that can drift.
 
 ## 3. Multi-tenancy architecture
 
@@ -163,17 +123,22 @@ Customers (contacts) authenticate into the same org but with role `CUSTOMER`; th
 - Permissions are string keys `resource.action` seeded per organization; roles are rows (`Role` → `RolePermission`), so custom roles and Light Agent (§8) drop in with no code change.
 - System roles seeded per org: `SUPER_ADMIN`, `ADMIN`, `AGENT`, `LIGHT_AGENT`, `CUSTOMER`.
 - Second layer beyond permissions: **record-level policies** in services (e.g. an agent with `ticket.read` still only sees tickets in their departments unless they hold `ticket.read.all`).
-- Rate limiting: `@nestjs/throttler` backed by Redis; stricter buckets on `/auth/*`.
+- Rate limiting: `@nestjs/throttler` with a default bucket and a stricter `auth`
+  bucket on login, registration, password reset and invite resends. Counters live in
+  process memory today, so limits apply per API instance; moving them to Redis is
+  required before running more than one instance (tracked in DEPLOYMENT.md).
 
 ## 5. Docker development architecture
 
-`docker compose up` starts: `postgres:16`, `redis:7`, `minio` (S3-compatible), `mailhog` (SMTP capture), `api`, `worker`, `web`.
+`docker compose --profile local-db up --build` starts `postgres:16`, `redis:7`,
+`minio` (S3-compatible), `mailhog` (SMTP capture), `api`, `worker` and `web`.
 
-- API and web run in dev mode with bind mounts + hot reload; `node_modules` kept in anonymous volumes.
-- `api` entrypoint waits for Postgres, runs `prisma migrate deploy`, then starts.
-- A one-shot `seed` profile creates the demo organization, roles, permissions and an admin user.
+- The `api` service runs `prisma migrate deploy` before starting. In production this belongs in a separate release job (see DEPLOYMENT.md) so two starting instances cannot migrate concurrently.
+- `pnpm db:seed` creates a demo organization with the system roles, permission
+  catalogue, two departments, an admin and an agent.
 - `docker-compose.prod.yml` uses multi-stage builds (distroless runtime), no bind mounts, external managed Postgres/Redis/S3, and Nginx in front.
-- If you supply a managed PostgreSQL connection string, set `DATABASE_URL` in `.env` and the `postgres` service is skipped via the `local-db` compose profile.
+- The local `postgres` service sits behind the `local-db` compose profile: supply a
+  managed `DATABASE_URL` and run `docker compose up` without the profile to skip it.
 
 ## 6. Non-functional commitments
 

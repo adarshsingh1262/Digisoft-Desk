@@ -1,6 +1,7 @@
-# Digisoft360 Help Desk — API Plan
+# Digisoft360 Help Desk — API Reference and Plan
 
-> Status: **Planning deliverable (§70)**. Endpoints marked **P1** are in Phase 1 scope; the rest are planned.
+> Status: endpoints marked **P1** are **implemented and tested**. Everything else is
+> planned for the phase noted beside it and is not reachable yet.
 
 Base path `/api/v1`. All responses use the envelope:
 
@@ -11,7 +12,7 @@ Base path `/api/v1`. All responses use the envelope:
 
 List endpoints share `?page&pageSize&sort&order&q&<filters>` and are cursor-capable where volume demands it. Every route except `@Public()` ones requires a bearer access token and is checked by `PermissionsGuard`.
 
-## Auth — P1
+## Auth — P1 (implemented)
 ```
 POST   /auth/register                 # creates org + super admin (self-serve signup)
 POST   /auth/login
@@ -25,7 +26,7 @@ POST   /auth/resend-verification
 PATCH  /auth/password                 # change own password
 ```
 
-## Organization — P1
+## Organization — P1 (implemented)
 ```
 GET    /organizations/current
 PATCH  /organizations/current
@@ -36,7 +37,7 @@ POST   /organizations/current/business-hours/:id/holidays
 DELETE /organizations/current/holidays/:id
 ```
 
-## Users, roles, permissions, departments, teams — P1
+## Users, roles, permissions, departments, teams — P1 (implemented)
 ```
 GET|POST        /users
 GET|PATCH|DELETE /users/:id
@@ -56,7 +57,7 @@ GET|PATCH|DELETE /teams/:id
 PATCH           /teams/:id/members
 ```
 
-## Contacts & accounts — P1
+## Contacts & accounts — P1 (implemented)
 ```
 GET|POST        /contacts
 GET|PATCH|DELETE /contacts/:id
@@ -158,15 +159,33 @@ POST /tickets/:id/csat                # @Public via signed token
 GET  /csat/summary
 ```
 
-## Notifications & search — P1/P2
+## Notifications — P1 (implemented)
 ```
-GET   /notifications · POST /notifications/:id/read · POST /notifications/read-all
-GET   /search?q=&types=tickets,contacts,accounts,articles
+GET    /notifications?page&pageSize&unreadOnly
+GET    /notifications/unread-count
+POST   /notifications/:id/read
+POST   /notifications/read-all
+```
+
+## Health — P1 (implemented)
+```
+GET    /health                        # @Public; reports database and redis status
+```
+
+## Search — P2
+```
+GET    /search?q=&types=tickets,contacts,accounts,articles
 ```
 
 ## Socket.IO events (§43)
 
-Namespace `/rt`, authenticated on handshake, rooms `org:{id}`, `user:{id}`, `ticket:{id}`, `dept:{id}`.
+Namespace `/rt`, authenticated on handshake with the access token. A socket joins
+`org:{id}` and `org:{id}:user:{userId}` only, so a broadcast cannot cross a tenant
+boundary. Ticket and department rooms arrive with Phase 2.
+
+Implemented today: `notification.created`, `agent.online`, `agent.offline`. Background
+workers publish envelopes on the Redis channel `rt:emit`, which the API instances fan
+out to their own sockets.
 
 ```
 server -> client: ticket.created · ticket.updated · ticket.assigned ·

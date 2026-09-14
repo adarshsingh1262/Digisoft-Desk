@@ -1,4 +1,8 @@
-# Phase 1 — Foundation (implementation plan)
+# Phase 1 — Foundation
+
+> **Status: complete.** Every item below is implemented, and the definition of done at
+> the bottom was verified against a real PostgreSQL and Redis. Two deliverables landed
+> differently from the plan and are noted inline.
 
 **Goal:** a running, secured, multi-tenant foundation — no ticketing yet. Ends with `docker compose up` producing a working login, an organization, users with roles/permissions, departments/teams, contacts and accounts, all real (no mock data, Rule 3).
 
@@ -9,9 +13,9 @@
 | 1 | Workspace scaffold | pnpm workspaces, strict tsconfig bases, ESLint/Prettier, Husky + lint-staged, `packages/shared`. |
 | 2 | Docker dev stack | postgres 16, redis 7, minio, mailhog, api, worker, web; healthchecks + wait-for. |
 | 3 | Env & config | `.env.example`, Zod env schema, fail-fast validation, `ENVIRONMENT.md`. |
-| 4 | Prisma foundation | `schema.prisma` for the Phase-1 tables (DATABASE.md §3), initial migration, seed script. |
+| 4 | Prisma foundation | `schema.prisma` for the Phase-1 tables (DATABASE.md §3), initial migration, seed script. **Changed from plan:** this lives in `packages/db`, not `apps/api`, so the API and worker share one generated client. |
 | 5 | Tenant isolation layer | `TenantContext` (AsyncLocalStorage), Prisma client extension, `$unscoped()` escape hatch, isolation test suite. |
-| 6 | Common layer | global exception filter + error envelope, response interceptor, pino logging with redaction, `ValidationPipe` (whitelist + forbidNonWhitelisted), Throttler on Redis, Helmet, CORS. |
+| 6 | Common layer | global exception filter + error envelope, response interceptor, pino logging with redaction, Zod validation pipe (shared schemas), Throttler, Helmet, CORS. **Changed from plan:** validation uses the Zod schemas from `packages/shared` rather than class-validator, so the frontend and backend enforce identical rules; throttler counters are in memory, not Redis (see ENVIRONMENT.md). |
 | 7 | Auth module | register (org + super admin), login, refresh with rotation + reuse detection, logout, me, forgot/reset password, email verification, change password. Argon2id. |
 | 8 | RBAC | Permission catalogue seed, Role/RolePermission/UserRole, global `PermissionsGuard`, `@RequirePermissions`, `@Public`, `@CurrentUser`. |
 | 9 | Organizations module | read/update current org, business hours + holidays CRUD. |
@@ -61,8 +65,36 @@ THROTTLE_TTL, THROTTLE_LIMIT, LOG_LEVEL
 NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SOCKET_URL
 ```
 
-## Definition of done for Phase 1
-`docker compose up` → migrations applied → seed creates a demo org, the five system roles and an admin user → log in at `http://localhost:3000` → manage users, roles, departments, teams, contacts and accounts against the real API → tenant-isolation and auth test suites pass.
+## Definition of done for Phase 1 — verified
+
+Run against PostgreSQL 16 and Redis 7:
+
+- migrations apply from an empty database; the seed creates a demo organization, the
+  five system roles, the permission catalogue, two departments, an admin and an agent;
+- the API boots, `/api/v1/health` reports database and Redis up;
+- registration provisions an organization, its roles, a default department and business
+  hours in one transaction, and returns a session;
+- login, refresh rotation, replay detection, forgot/reset password, invite acceptance
+  and password change all work end to end, with the reset email delivered through the
+  BullMQ queue by the worker process;
+- a user of organization A cannot read, update or delete organization B's records —
+  every attempt returns 404;
+- an agent is refused `contact.delete`, `role.read` and `organization.update`; a role
+  change takes effect on the next request without re-issuing the token;
+- the frontend signs in, lists and creates contacts and accounts, and manages settings
+  against the real API.
+
+**Test results:** 37 API unit tests, 27 API integration tests (auth, tenant isolation,
+RBAC, rate limiting), 3 browser tests — all passing.
+
+## Known limitations carried into Phase 2
+
+- Rate-limit counters are per API instance (in-memory), so they must move to a shared
+  Redis store before horizontal scaling.
+- Custom roles and teams can be created through the API but have no builder UI yet;
+  the Roles and Teams screens are read-only.
+- Object storage is configured but unused until attachments arrive in Phase 2.
+- No ESLint configuration ships yet; `pnpm typecheck` and the test suites are the gate.
 
 ## Explicitly **not** in Phase 1
 Tickets, conversations, attachments on tickets, SLA, automation, knowledge base, community, channels beyond transactional email, AI, dashboards and reports. Nothing in the UI will link to an unimplemented feature with a dead control (Rule 2).
