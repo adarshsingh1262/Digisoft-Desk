@@ -16,6 +16,13 @@ import { handleChannelSend, type ChannelSendJob } from './processors/channel-sen
 import { handleWebhookDelivery, type WebhookDeliveryJob } from './processors/webhook.processor';
 import { handleAiAnalyse, type AiAnalyseJob } from './processors/ai.processor';
 import type { AiDeps } from '@digisoft/ai';
+import {
+  handleMetricsRollup,
+  handleReportExport,
+  type AnalyticsProcessorDeps,
+  type ReportExportJob,
+} from './processors/analytics.processor';
+import { createStorageProvider } from '@digisoft/storage';
 
 const env = loadEnv();
 const logger = pino({ level: env.LOG_LEVEL, name: 'worker' });
@@ -26,10 +33,30 @@ const emailProvider = createEmailProvider(env);
 const emailQueue = new Queue('email', { connection: connection.duplicate() });
 const automationQueue = new Queue<TriggerJob>(AUTOMATION_QUEUE, { connection: connection.duplicate() });
 const slaQueue = new Queue(SLA_QUEUE, { connection: connection.duplicate() });
+const analyticsQueue = new Queue('analytics', { connection: connection.duplicate() });
 
 const aiDeps: AiDeps = {
   prisma,
   encryptionKey: env.CHANNEL_ENCRYPTION_KEY,
+  log: (level, message, meta) =>
+    logger[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info'](meta ?? {}, message),
+};
+
+const analyticsDeps: AnalyticsProcessorDeps = {
+  prisma,
+  logger,
+  storage: createStorageProvider({
+    provider: env.STORAGE_PROVIDER,
+    localPath: env.STORAGE_LOCAL_PATH,
+    bucket: env.S3_BUCKET,
+    region: env.S3_REGION,
+    endpoint: env.S3_ENDPOINT,
+    accessKeyId: env.S3_ACCESS_KEY,
+    secretAccessKey: env.S3_SECRET_KEY,
+    forcePathStyle: env.S3_FORCE_PATH_STYLE,
+    signedUrlTtl: env.S3_SIGNED_URL_TTL_SECONDS,
+  }),
+  rollupDays: env.METRICS_ROLLUP_DAYS,
   log: (level, message, meta) =>
     logger[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info'](meta ?? {}, message),
 };
@@ -86,6 +113,16 @@ const aiWorker = new Worker<AiAnalyseJob>(
   { connection: connection.duplicate(), concurrency: 2 },
 );
 
+const analyticsWorker = new Worker<ReportExportJob>(
+  'analytics',
+  (job: Job<ReportExportJob>) =>
+    job.name === 'metrics-rollup'
+      ? handleMetricsRollup(analyticsDeps)
+      : handleReportExport(job, analyticsDeps),
+  // Rollups scan the ticket table; one at a time keeps them off the other lanes.
+  { connection: connection.duplicate(), concurrency: 1 },
+);
+
 const slaWorker = new Worker(
   SLA_QUEUE,
   () => handleSlaScan(engineDeps, automationQueue),
@@ -101,6 +138,18 @@ void slaQueue.add(SLA_SCAN_JOB, {}, {
   removeOnFail: 10,
 });
 
+// A repeatable job keyed by name: adding it again on every boot is a no-op.
+void analyticsQueue.add(
+  'metrics-rollup',
+  { organizationId: '', exportId: '' },
+  {
+    repeat: { every: env.METRICS_ROLLUP_INTERVAL_SECONDS * 1000 },
+    jobId: 'metrics-rollup',
+    removeOnComplete: true,
+    removeOnFail: 10,
+  },
+);
+
 for (const worker of [
   emailWorker,
   notificationWorker,
@@ -109,6 +158,7 @@ for (const worker of [
   channelWorker,
   webhookWorker,
   aiWorker,
+  analyticsWorker,
 ]) {
   worker.on('failed', (job, error) => {
     logger.error(
