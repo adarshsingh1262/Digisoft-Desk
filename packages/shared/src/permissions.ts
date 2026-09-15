@@ -84,6 +84,11 @@ export const PERMISSIONS = {
   /// Configure the provider, the model, the budget and which features are on.
   AI_MANAGE: 'ai.manage',
 
+  /// Dashboards, reports and exports.
+  REPORT_READ: 'report.read',
+  /// Saved report definitions and CSAT survey settings.
+  REPORT_MANAGE: 'report.manage',
+
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -134,6 +139,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = {
     PERMISSIONS.CHANNEL_READ,
     PERMISSIONS.CHAT_HANDLE,
     PERMISSIONS.AI_USE,
+    PERMISSIONS.REPORT_READ,
   ],
   /// Collaborators: they can read their departments' queues and comment internally,
   /// but never reply to a customer and never see the whole organization's tickets.

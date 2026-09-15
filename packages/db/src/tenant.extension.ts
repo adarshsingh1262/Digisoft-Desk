@@ -50,6 +50,12 @@ export const TENANT_MODELS: ReadonlySet<string> = new Set([
   'ApiKey',
   'AiSettings',
   'AiInsight',
+  'CsatSettings',
+  'CsatResponse',
+  'ReportDefinition',
+  'ReportExport',
+  'TicketDailyMetric',
+  'AgentDailyMetric',
 ]);
 
 /** Models with a `deletedAt` column that should be hidden from ordinary reads. */

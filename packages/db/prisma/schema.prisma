@@ -93,6 +93,12 @@ model Organization {
   apiKeys             ApiKey[]
   aiSettings          AiSettings?
   aiInsights          AiInsight[]
+  csatSettings        CsatSettings?
+  csatResponses       CsatResponse[]
+  reportDefinitions   ReportDefinition[]
+  reportExports       ReportExport[]
+  ticketDailyMetrics  TicketDailyMetric[]
+  agentDailyMetrics   AgentDailyMetric[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -176,6 +182,10 @@ model User {
   apiKeys            ApiKey[]            @relation("ApiKeyIdentity")
   createdApiKeys     ApiKey[]            @relation("ApiKeyCreator")
   aiInsights         AiInsight[]
+  csatResponses      CsatResponse[]
+  reportDefinitions  ReportDefinition[]
+  reportExports      ReportExport[]
+  dailyMetrics       AgentDailyMetric[]
 
   @@unique([organizationId, email])
   @@index([organizationId, isActive, deletedAt])
@@ -262,6 +272,8 @@ model Department {
   assignmentRules AssignmentRule[]
   webForms        WebForm[]
   channels        Channel[]
+  csatResponses   CsatResponse[]
+  dailyMetrics    TicketDailyMetric[]
 
   @@unique([organizationId, name])
   @@index([organizationId, deletedAt])
@@ -368,6 +380,7 @@ model Contact {
   tickets           Ticket[]
   messages          TicketMessage[]
   activities        Activity[]
+  csatResponses     CsatResponse[]
 
   @@unique([organizationId, email])
   @@index([organizationId, accountId])
@@ -640,6 +653,7 @@ model Ticket {
   communityTopics CommunityTopic[]
   chatSessions    ChatSession[]
   aiInsights      AiInsight[]
+  csatResponse    CsatResponse?
 
   messages    TicketMessage[]
   attachments Attachment[]
@@ -1629,4 +1643,182 @@ model AiInsight {
   @@index([organizationId, ticketId, type, createdAt])
   @@index([organizationId, createdAt])
   @@map("ai_insights")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — analytics, reporting and CSAT
+// ---------------------------------------------------------------------------
+
+enum CsatStatus {
+  PENDING
+  ANSWERED
+  EXPIRED
+}
+
+enum ReportKind {
+  TICKETS
+  AGENTS
+  SLA
+  CSAT
+}
+
+enum ExportStatus {
+  QUEUED
+  READY
+  FAILED
+}
+
+/// When and how satisfaction surveys go out. One row per organization.
+model CsatSettings {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  isEnabled      Boolean  @default(false)
+  /// Minutes to wait after a ticket is resolved before the survey is sent.
+  delayMinutes   Int      @default(60)
+  /// Days a survey link stays usable.
+  expiryDays     Int      @default(14)
+  subject        String   @default("How did we do?")
+  introText      String   @default("Please rate the support you received. It takes a few seconds.")
+  thankYouText   String   @default("Thank you — your feedback goes straight to the team that helped you.")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("csat_settings")
+}
+
+/// One survey per resolution. The row is written when the survey is sent, so the
+/// response rate is a fact rather than an estimate.
+model CsatResponse {
+  id             String     @id @default(cuid())
+  organizationId String
+  ticketId       String     @unique
+  contactId      String?
+  /// The agent credited with the resolution, snapshotted so later reassignment
+  /// cannot rewrite history.
+  agentId        String?
+  departmentId   String?
+  status         CsatStatus @default(PENDING)
+  /// SHA-256 of the link token; the token itself is only ever in the email.
+  tokenHash      String     @unique
+  /// 1–5. Null until the customer answers.
+  rating         Int?
+  comment        String?
+  sentAt         DateTime   @default(now())
+  respondedAt    DateTime?
+  expiresAt      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  agent        User?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, ticketId])
+  @@index([organizationId, status, respondedAt])
+  @@index([organizationId, agentId, respondedAt])
+  @@map("csat_responses")
+}
+
+/// A saved set of report filters, so a team looks at the same numbers every week.
+model ReportDefinition {
+  id             String     @id @default(cuid())
+  organizationId String
+  name           String
+  kind           ReportKind
+  /// Range, department, agent, priority and grouping — validated by the same Zod
+  /// schema the query endpoints use.
+  filters        Json
+  description    String?
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, name])
+  @@index([organizationId, kind])
+  @@map("report_definitions")
+}
+
+/// A CSV the worker writes to object storage; downloads are re-authorised and signed.
+model ReportExport {
+  id             String       @id @default(cuid())
+  organizationId String
+  kind           ReportKind
+  filters        Json
+  status         ExportStatus @default(QUEUED)
+  storageKey     String?
+  fileName       String?
+  rowCount       Int          @default(0)
+  sizeBytes      Int          @default(0)
+  error          String?
+  requestedById  String?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("report_exports")
+}
+
+/// Daily ticket rollup, one row per department per day (`departmentId` null is the
+/// department-less queue, not a total — organization figures are the sum of the day's
+/// rows), so a dashboard reads days instead of scanning the ticket table.
+model TicketDailyMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// Midnight UTC of the day being summarised.
+  day            DateTime
+  departmentId   String?
+  created        Int      @default(0)
+  resolved       Int      @default(0)
+  closed         Int      @default(0)
+  reopened       Int      @default(0)
+  firstResponses Int      @default(0)
+  slaFirstMet    Int      @default(0)
+  slaFirstBreach Int      @default(0)
+  slaResMet      Int      @default(0)
+  slaResBreach   Int      @default(0)
+  /// Sums, not averages: two days can be added without weighting them by hand.
+  firstResponseMinutes Int @default(0)
+  resolutionMinutes    Int @default(0)
+  resolutionSamples    Int @default(0)
+  computedAt     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, day, departmentId])
+  @@index([organizationId, day])
+  @@map("ticket_daily_metrics")
+}
+
+/// Daily agent rollup: what each agent actually did that day.
+model AgentDailyMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  day            DateTime
+  agentId        String
+  assigned       Int      @default(0)
+  resolved       Int      @default(0)
+  publicReplies  Int      @default(0)
+  firstResponses Int      @default(0)
+  firstResponseMinutes Int @default(0)
+  resolutionMinutes    Int @default(0)
+  resolutionSamples    Int @default(0)
+  csatResponses  Int      @default(0)
+  csatRatingSum  Int      @default(0)
+  computedAt     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent        User         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, day, agentId])
+  @@index([organizationId, day])
+  @@map("agent_daily_metrics")
 }
