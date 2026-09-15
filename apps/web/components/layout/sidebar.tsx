@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BarChart3,
   BookOpen,
   Building2,
   ClipboardList,
@@ -42,6 +43,7 @@ const NAV: NavItem[] = [
   { href: '/community', label: 'Community', icon: MessagesSquare, permission: PERMISSIONS.COMMUNITY_MODERATE },
   { href: '/chat', label: 'Live chat', icon: MessageCircle, permission: PERMISSIONS.CHAT_HANDLE },
   { href: '/automation/rules', label: 'Automation', icon: Workflow, permission: PERMISSIONS.OPERATIONS_READ },
+  { href: '/reports', label: 'Reports', icon: BarChart3, permission: PERMISSIONS.REPORT_READ },
   { href: '/settings/organization', label: 'Settings', icon: Settings, permission: PERMISSIONS.ORGANIZATION_READ },
 ];
 
@@ -109,7 +111,7 @@ export function Sidebar() {
         </nav>
 
         <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Phases 1–6 · helpdesk, operations, self-service, omnichannel, assistant
+          Phases 1–7 · helpdesk, operations, self-service, omnichannel, assistant, analytics
         </p>
       </aside>
     </>

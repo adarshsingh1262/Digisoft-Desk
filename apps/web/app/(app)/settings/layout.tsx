@@ -24,6 +24,7 @@ const TABS = [
   { href: '/settings/webhooks', label: 'Webhooks', permission: PERMISSIONS.WEBHOOK_READ },
   { href: '/settings/api-keys', label: 'API keys', permission: PERMISSIONS.APIKEY_MANAGE },
   { href: '/settings/ai', label: 'Assistant', permission: PERMISSIONS.AI_USE },
+  { href: '/settings/csat', label: 'Satisfaction surveys', permission: PERMISSIONS.REPORT_MANAGE },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

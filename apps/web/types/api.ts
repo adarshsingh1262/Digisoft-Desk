@@ -917,3 +917,188 @@ export interface AiArticleSuggestion {
   summary: string | null;
   score: number;
 }
+
+// --- Phase 7: analytics, reporting and CSAT ---------------------------------------
+
+export interface TrendPointDto {
+  day: string;
+  created: number;
+  resolved: number;
+  closed: number;
+  reopened: number;
+}
+
+export interface TicketReportDto {
+  range: { from: string; to: string };
+  totals: {
+    created: number;
+    resolved: number;
+    closed: number;
+    reopened: number;
+    open: number;
+    unassigned: number;
+    overdue: number;
+    avgFirstResponseMinutes: number | null;
+    avgResolutionMinutes: number | null;
+    resolutionRate: number | null;
+  };
+  trend: TrendPointDto[];
+  byPriority: { id: string; name: string; colour: string | null; count: number }[];
+  byStatus: { id: string; name: string; colour: string | null; count: number }[];
+  byChannel: { channel: string; count: number }[];
+  byDepartment: { id: string | null; name: string; created: number; resolved: number }[];
+}
+
+export interface AgentReportRowDto {
+  agentId: string;
+  name: string;
+  email: string;
+  assigned: number;
+  resolved: number;
+  publicReplies: number;
+  firstResponses: number;
+  avgFirstResponseMinutes: number | null;
+  avgResolutionMinutes: number | null;
+  csatResponses: number;
+  csatAverage: number | null;
+  openNow: number;
+}
+
+export interface AgentReportDto {
+  range: { from: string; to: string };
+  rows: AgentReportRowDto[];
+}
+
+export interface SlaReportDto {
+  range: { from: string; to: string };
+  totals: {
+    firstResponses: number;
+    firstResponseMet: number;
+    firstResponseBreached: number;
+    firstResponseCompliance: number | null;
+    resolutions: number;
+    resolutionMet: number;
+    resolutionBreached: number;
+    resolutionCompliance: number | null;
+    atRisk: number;
+    breachedOpen: number;
+  };
+  trend: {
+    day: string;
+    firstResponseMet: number;
+    firstResponseBreached: number;
+    resolutionMet: number;
+    resolutionBreached: number;
+  }[];
+  byPolicy: {
+    id: string;
+    name: string;
+    firstResponseBreached: number;
+    resolutionBreached: number;
+    tickets: number;
+  }[];
+}
+
+export interface CsatReportDto {
+  range: { from: string; to: string };
+  totals: {
+    sent: number;
+    responses: number;
+    responseRate: number | null;
+    average: number | null;
+    positive: number;
+    neutral: number;
+    negative: number;
+    satisfactionRate: number | null;
+  };
+  distribution: { rating: number; count: number }[];
+  trend: { day: string; responses: number; average: number | null }[];
+  byAgent: { agentId: string; name: string; responses: number; average: number | null }[];
+  comments: {
+    id: string;
+    rating: number;
+    comment: string;
+    respondedAt: string;
+    ticketId: string;
+    ticketNumber: number;
+    subject: string;
+    contactName: string | null;
+  }[];
+}
+
+export interface DashboardDto {
+  range: { from: string; to: string };
+  tickets: TicketReportDto['totals'];
+  trend: TrendPointDto[];
+  byPriority: TicketReportDto['byPriority'];
+  byStatus: TicketReportDto['byStatus'];
+  byChannel: TicketReportDto['byChannel'];
+  sla: SlaReportDto['totals'];
+  csat: CsatReportDto['totals'];
+  topAgents: AgentReportRowDto[];
+}
+
+export type ReportKindDto = 'TICKETS' | 'AGENTS' | 'SLA' | 'CSAT';
+export type ExportStatusDto = 'QUEUED' | 'READY' | 'FAILED';
+
+export interface ReportExportDto {
+  id: string;
+  kind: ReportKindDto;
+  filters: Record<string, unknown>;
+  status: ExportStatusDto;
+  fileName: string | null;
+  rowCount: number;
+  sizeBytes: number;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  requestedBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface ReportDefinitionDto {
+  id: string;
+  name: string;
+  kind: ReportKindDto;
+  description: string | null;
+  filters: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface CsatSettingsDto {
+  id: string;
+  isEnabled: boolean;
+  delayMinutes: number;
+  expiryDays: number;
+  subject: string;
+  introText: string;
+  thankYouText: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketCsatDto {
+  id: string;
+  status: 'PENDING' | 'ANSWERED' | 'EXPIRED';
+  rating: number | null;
+  comment: string | null;
+  sentAt: string;
+  respondedAt: string | null;
+  expiresAt: string;
+}
+
+export interface CsatSurveyDto {
+  ticketNumber: number;
+  subject: string;
+  organizationName: string;
+  introText: string;
+  expiresAt: string;
+}
+
+export interface CsatSurveyResultDto {
+  rating: number;
+  thankYouText: string;
+  ticketNumber: number;
+  organizationName: string;
+}
