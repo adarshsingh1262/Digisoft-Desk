@@ -3,7 +3,8 @@ name: digisoft-helpdesk
 services:
   postgres:
     image: postgres:16-alpine
-    # Disable with: docker compose --profile "" up  (and point DATABASE_URL elsewhere)
+    # Disable with: docker compose up (no --profile local-db) after editing the api
+    # and worker services' DATABASE_URL below to point at a managed database instead.
     profiles: ['local-db']
     environment:
       POSTGRES_USER: digisoft
@@ -48,7 +49,13 @@ services:
       dockerfile: apps/api/Dockerfile
     env_file: [.env]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public}
+      # Deliberately not ${DATABASE_URL:-...}: .env always sets DATABASE_URL (to
+      # localhost, for running pnpm dev outside Docker), and Compose reads that
+      # same .env for its own variable substitution — so the fallback here would
+      # never trigger and every container would try to reach Postgres on its own
+      # loopback. The postgres service below is what --profile local-db means;
+      # pointing at a managed database instead is a one-line edit to this file.
+      DATABASE_URL: postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public
       REDIS_URL: redis://redis:6379
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
@@ -66,7 +73,13 @@ services:
       dockerfile: apps/worker/Dockerfile
     env_file: [.env]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public}
+      # Deliberately not ${DATABASE_URL:-...}: .env always sets DATABASE_URL (to
+      # localhost, for running pnpm dev outside Docker), and Compose reads that
+      # same .env for its own variable substitution — so the fallback here would
+      # never trigger and every container would try to reach Postgres on its own
+      # loopback. The postgres service below is what --profile local-db means;
+      # pointing at a managed database instead is a one-line edit to this file.
+      DATABASE_URL: postgresql://digisoft:digisoft@postgres:5432/digisoft_helpdesk?schema=public
       REDIS_URL: redis://redis:6379
       SMTP_HOST: mailhog
       SMTP_PORT: 1025

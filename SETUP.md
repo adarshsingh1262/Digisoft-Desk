@@ -21,8 +21,10 @@ docker compose --profile local-db up --build
 Starts PostgreSQL, Redis, MinIO, Mailhog, the API, the worker and the frontend. The
 API container applies migrations on boot.
 
-Using a managed database instead? Put its connection string in `DATABASE_URL` and drop
-the profile flag so the local `postgres` service is skipped:
+Using a managed database instead? Edit the `DATABASE_URL` line under the `api` and
+`worker` services in `docker-compose.yml` to your connection string (not `.env` — the
+containers ignore the app's own `DATABASE_URL` in favor of the local `postgres`
+service's hostname by design), then drop the profile flag so that service is skipped:
 
 ```bash
 docker compose up --build

@@ -4,6 +4,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" alone isn't reliable across a multi-stage Docker build: the build stage
+  // (no openssl installed) and the runtime stage (openssl 3.0.x, from bookworm's apt)
+  // can auto-detect different platforms, so the client generated in one stage can't
+  // find its query engine in the other. Pin the runtime target explicitly.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
