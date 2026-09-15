@@ -53,6 +53,8 @@ export async function resetDatabase(prisma: PrismaClient, redis?: Redis): Promis
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
       ai_insights, ai_settings,
+      ticket_daily_metrics, agent_daily_metrics,
+      report_exports, report_definitions, csat_responses, csat_settings,
       api_keys, webhook_deliveries, webhook_endpoints,
       chat_sessions, channel_events, channel_identities, channels,
       community_votes, community_replies, community_topics, community_categories,
