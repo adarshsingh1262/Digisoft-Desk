@@ -20,18 +20,27 @@ export class MailerService {
     return this.config.get('FRONTEND_URL');
   }
 
+  /**
+   * `delayMs` lets a caller post-date a message — a satisfaction survey should not land
+   * in the same second as the resolution notice.
+   */
   async send(
     organizationId: string | null,
     to: string,
     template: EmailTemplate,
+    delayMs = 0,
   ): Promise<void> {
     const rendered = renderEmail(template);
-    await this.queue.add(EMAIL_JOB, {
-      organizationId,
-      to,
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-    });
+    await this.queue.add(
+      EMAIL_JOB,
+      {
+        organizationId,
+        to,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      },
+      delayMs > 0 ? { delay: delayMs } : {},
+    );
   }
 }

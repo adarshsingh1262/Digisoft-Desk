@@ -2,7 +2,17 @@ export type EmailTemplate =
   | { kind: 'verify-email'; firstName: string; url: string }
   | { kind: 'reset-password'; firstName: string; url: string; expiresInMinutes: number }
   | { kind: 'invite'; firstName: string; organizationName: string; url: string }
-  | { kind: 'password-changed'; firstName: string };
+  | { kind: 'password-changed'; firstName: string }
+  | {
+      kind: 'csat-survey';
+      subject: string;
+      contactName: string;
+      organizationName: string;
+      ticketNumber: number;
+      ticketSubject: string;
+      introText: string;
+      url: string;
+    };
 
 export interface RenderedEmail {
   subject: string;
@@ -29,6 +39,17 @@ ${bodyHtml}
 function button(url: string, label: string): string {
   return `<p><a href="${escapeHtml(url)}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">${escapeHtml(label)}</a></p>
 <p style="font-size:12px;color:#71717a">If the button does not work, paste this link into your browser:<br>${escapeHtml(url)}</p>`;
+}
+
+/** One link per score, so a customer can answer from the email in a single click. */
+function ratingLinks(url: string): string {
+  const labels = ['1 — Very poor', '2 — Poor', '3 — Okay', '4 — Good', '5 — Excellent'];
+  return `<p>${labels
+    .map(
+      (label, index) =>
+        `<a href="${escapeHtml(`${url}?rating=${index + 1}`)}" style="display:inline-block;border:1px solid #d4d4d8;border-radius:6px;padding:8px 12px;margin:0 6px 6px 0;text-decoration:none;color:#18181b">${escapeHtml(label)}</a>`,
+    )
+    .join('')}</p>`;
 }
 
 export function renderEmail(template: EmailTemplate): RenderedEmail {
@@ -68,6 +89,18 @@ export function renderEmail(template: EmailTemplate): RenderedEmail {
           `<p>Your Digisoft360 Help Desk password was just changed. If this was not you, contact your administrator immediately.</p>`,
         ),
         text: `Hi ${template.firstName},\n\nYour password was just changed. If this was not you, contact your administrator immediately.`,
+      };
+    case 'csat-survey':
+      return {
+        subject: template.subject,
+        html: layout(
+          `Hi ${template.contactName},`,
+          `<p>${escapeHtml(template.introText)}</p>` +
+            `<p style="color:#71717a;font-size:13px">About ticket #${template.ticketNumber} — ${escapeHtml(template.ticketSubject)}</p>` +
+            ratingLinks(template.url) +
+            `<p style="font-size:12px;color:#71717a">Or open the survey directly:<br>${escapeHtml(template.url)}</p>`,
+        ),
+        text: `Hi ${template.contactName},\n\n${template.introText}\n\nTicket #${template.ticketNumber} — ${template.ticketSubject}\n\nRate your support: ${template.url}`,
       };
   }
 }

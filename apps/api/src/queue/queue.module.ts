@@ -11,6 +11,7 @@ export const SLA_QUEUE_TOKEN = Symbol('SLA_QUEUE');
 export const CHANNEL_QUEUE_TOKEN = Symbol('CHANNEL_QUEUE');
 export const WEBHOOK_QUEUE_TOKEN = Symbol('WEBHOOK_QUEUE');
 export const AI_QUEUE_TOKEN = Symbol('AI_QUEUE');
+export const ANALYTICS_QUEUE_TOKEN = Symbol('ANALYTICS_QUEUE');
 
 const defaultJobOptions = {
   attempts: 5,
@@ -50,6 +51,11 @@ function queueFactory(name: string) {
       useFactory: queueFactory(QUEUE_NAMES.WEBHOOK),
     },
     { provide: AI_QUEUE_TOKEN, inject: [REDIS_CLIENT], useFactory: queueFactory(QUEUE_NAMES.AI) },
+    {
+      provide: ANALYTICS_QUEUE_TOKEN,
+      inject: [REDIS_CLIENT],
+      useFactory: queueFactory(QUEUE_NAMES.ANALYTICS),
+    },
   ],
   exports: [
     EMAIL_QUEUE,
@@ -59,6 +65,7 @@ function queueFactory(name: string) {
     CHANNEL_QUEUE_TOKEN,
     WEBHOOK_QUEUE_TOKEN,
     AI_QUEUE_TOKEN,
+    ANALYTICS_QUEUE_TOKEN,
   ],
 })
 export class QueueModule implements OnApplicationShutdown {

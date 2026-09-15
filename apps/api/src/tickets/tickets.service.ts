@@ -23,6 +23,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { TicketEventsService } from './ticket-events.service';
 import { EngineService } from '../engine/engine.service';
 import { AiDispatchService } from '../ai/ai-dispatch.service';
+import { CsatService } from '../analytics/csat.service';
 import { TICKET_DETAIL_SELECT, TICKET_LIST_SELECT } from './ticket.select';
 import { ticketVisibilityFilter } from './ticket-visibility';
 
@@ -67,6 +68,7 @@ export class TicketsService {
     private readonly audit: AuditService,
     private readonly engine: EngineService,
     private readonly ai: AiDispatchService,
+    private readonly csat: CsatService,
   ) {}
 
   async list(actor: AuthenticatedUser, query: ListTicketsQuery): Promise<Paginated<unknown>> {
@@ -396,6 +398,11 @@ export class TicketsService {
       from: before.status.name,
       to: fresh.status.name,
     });
+    // Only the move into a resolved status asks for feedback; resolving an already
+    // resolved ticket does not survey the customer twice.
+    if (status.isResolved && !before.resolvedAt) {
+      await this.csat.onTicketResolved(actor.organizationId, id);
+    }
     return fresh;
   }
 

@@ -30,6 +30,7 @@ import { ChannelsModule } from './channels/channels.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { ChatModule } from './chat/chat.module';
 import { AiModule } from './ai/ai.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AiDispatchModule } from './ai/ai-dispatch.module';
 import { ChannelOutboundModule } from './channels/channel-outbound.module';
 import { AccountsModule } from './accounts/accounts.module';
@@ -115,6 +116,7 @@ import { PermissionCatalogueService } from './bootstrap/permission-catalogue.ser
     ChatModule,
     AiDispatchModule,
     AiModule,
+    AnalyticsModule,
     NotificationsModule,
     HealthModule,
   ],

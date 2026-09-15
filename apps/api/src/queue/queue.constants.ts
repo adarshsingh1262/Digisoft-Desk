@@ -6,6 +6,7 @@ export const QUEUE_NAMES = {
   CHANNEL: 'channel',
   WEBHOOK: 'webhook',
   AI: 'ai',
+  ANALYTICS: 'analytics',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -15,6 +16,8 @@ export const NOTIFICATION_JOB = 'deliver-notification';
 export const CHANNEL_SEND_JOB = 'channel-send';
 export const WEBHOOK_DELIVER_JOB = 'webhook-deliver';
 export const AI_ANALYSE_JOB = 'ai-analyse';
+export const METRICS_ROLLUP_JOB = 'metrics-rollup';
+export const REPORT_EXPORT_JOB = 'report-export';
 
 /** An agent reply leaving over the channel the ticket arrived on. */
 export interface ChannelSendJob {
@@ -37,6 +40,12 @@ export interface AiAnalyseJob {
   ticketId: string;
   types?: ('SUMMARY' | 'SENTIMENT' | 'INTENT' | 'SUGGESTED_REPLY')[];
   reason: 'TICKET_CREATED' | 'CUSTOMER_REPLIED' | 'MANUAL';
+}
+
+/** One report rendered to CSV and written to storage, out of the request path. */
+export interface ReportExportJob {
+  organizationId: string;
+  exportId: string;
 }
 
 export interface SendEmailJob {
