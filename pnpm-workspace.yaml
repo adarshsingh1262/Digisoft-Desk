@@ -9,3 +9,4 @@ onlyBuiltDependencies:
   - prisma
   - argon2
   - msgpackr-extract
+  - '@scarf/scarf'
