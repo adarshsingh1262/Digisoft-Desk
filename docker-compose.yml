@@ -51,6 +51,8 @@ services:
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
       EMAIL_PROVIDER: smtp
+      STORAGE_LOCAL_PATH: /var/lib/digisoft/storage
+    volumes: ['file-storage:/var/lib/digisoft/storage']
     ports: ['4000:4000']
     depends_on:
       redis: { condition: service_healthy }
@@ -67,6 +69,9 @@ services:
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
       EMAIL_PROVIDER: smtp
+      # The same volume as the API: the worker writes report exports, the API serves them.
+      STORAGE_LOCAL_PATH: /var/lib/digisoft/storage
+    volumes: ['file-storage:/var/lib/digisoft/storage']
     depends_on:
       redis: { condition: service_healthy }
 
@@ -81,6 +86,7 @@ services:
     depends_on: [api]
 
 volumes:
+  file-storage:
   postgres-data:
   redis-data:
   minio-data:

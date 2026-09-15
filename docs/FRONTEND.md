@@ -14,11 +14,11 @@ Three route groups with separate layouts and separate auth expectations.
 /accounts  /accounts/[id]
 /knowledge-base  /knowledge-base/new  /knowledge-base/[id]   (categories in a dialog)
 /community  /community/[id]                                   (categories in a dialog)
-/reports  /reports/[reportId]
 /automation/rules  /automation/assignment  /automation/sla  /automation/blueprints
 /chat                                                         live chat inbox
+/reports                                                      Tickets, Agents, SLA, CSAT and Exports tabs
 /settings/{organization,users,roles,departments,teams,ticket-fields,help-center,
-          web-forms,channels,webhooks,api-keys,ai}
+          web-forms,channels,webhooks,api-keys,ai,csat}
 ```
 
 ## `(portal)` — the help center, one route group for every tenant (built)

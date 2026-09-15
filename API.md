@@ -387,15 +387,46 @@ is a draft returned to the agent — nothing is ever sent to a customer, and an 
 category and priority are applied only when the agent presses the button. Internal
 comments are never included in what is sent to a provider.
 
-## Analytics — P7
+## Analytics — P7 (implemented)
 ```
-GET /dashboard                        # ?range&departmentId&agentId
-GET /reports/tickets · /reports/agents · /reports/sla · /reports/csat
-POST /reports/export                  # queued -> signed download URL
-GET|POST /report-definitions · /:id
-POST /tickets/:id/csat                # @Public via signed token
-GET  /csat/summary
+GET    /dashboard                      # report.read — the landing-screen summary
+GET    /reports/tickets                # report.read — volume, breakdowns, trend
+GET    /reports/agents                 # report.read — per-agent activity and CSAT
+GET    /reports/sla                    # report.read — compliance, at-risk, by policy
+GET    /reports/csat                   # report.read — ratings, distribution, comments
+
+GET    /reports/exports                # report.read — this organization's exports
+POST   /reports/export                 # report.read — { kind, filters } -> QUEUED
+GET    /reports/exports/:id            # report.read — status, row/byte counts
+GET    /reports/exports/:id/download   # report.read — 302 to a signed URL, or streamed
+
+GET    /report-definitions             # report.read — saved filter sets
+POST   /report-definitions             # report.manage
+GET    /report-definitions/:id         # report.read
+PATCH  /report-definitions/:id         # report.manage
+DELETE /report-definitions/:id         # report.manage
+
+GET    /csat/settings                  # report.read
+PATCH  /csat/settings                  # report.manage
+GET    /tickets/:id/csat               # ticket.read — this ticket's survey, if any
+
+GET    /csat/:token                    # @Public — the survey behind an emailed link
+POST   /csat/:token                    # @Public — { rating, comment? }; answers once
 ```
+Every report takes `range` (`today`, `7d`, `30d`, `90d`, or `custom` with `from`/`to`),
+plus `departmentId`, `agentId`, `priorityId` and `channelId` filters. Tickets and agents
+read from daily rollup tables the worker recomputes on a schedule; a request itself
+recomputes today's and yesterday's rows first if the sweep has not run recently, so a
+report is never stale by more than that recompute.
+
+An export is a queued job, not a synchronous download: the row moves `QUEUED` → `READY`
+(or `FAILED`) as the worker renders the CSV to the same storage attachments use, and the
+download endpoint re-authorises exactly like an attachment download.
+
+CSAT: when a ticket is resolved, and surveys are on, exactly one `CsatResponse` is
+created and its raw token is emailed — never returned by any authenticated endpoint. The
+public endpoints know nothing but that token; answering rotates it to `ANSWERED` and a
+second attempt is refused.
 
 ## Notifications — P1 (implemented)
 ```

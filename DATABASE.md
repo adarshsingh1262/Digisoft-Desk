@@ -338,7 +338,22 @@ model AuditLog {
     the race re-reads instead of failing.
   - `pgvector` and `KbArticleEmbedding` are still later work: retrieval today is keyword
     scoring over published articles (title ×3, summary ×2, body ×1).
-- **Phase 7** — `CsatResponse`, `ReportDefinition`, plus rollup tables `TicketDailyMetric` / `AgentDailyMetric` populated by a worker so dashboards never scan the ticket table (§40).
+- **Phase 7 (built)** — `TicketDailyMetric`, `AgentDailyMetric`, `CsatSettings`,
+  `CsatResponse`, `ReportDefinition`, `ReportExport` and the enums `CsatStatus`,
+  `ReportKind`, `ExportStatus`. Three decisions differ from the sketch:
+  - **Rollups are per-department rows, not a total plus breakdowns.** `TicketDailyMetric`
+    has one row per `(organizationId, day, departmentId)` — `departmentId = null` is the
+    department-less queue, not an organization total — so an organization figure is the
+    sum of that day's rows and a department figure is one row's lookup. `AgentDailyMetric`
+    is the same shape, keyed by agent.
+  - **A report is never older than the last two days.** Rather than trusting the worker's
+    schedule, a report request itself recomputes today's and yesterday's rollup rows
+    first if they have not been touched in the last two minutes, so a dashboard opened
+    moments after a ticket closes shows that ticket.
+  - **CSAT stores only a token hash**, the same pattern as `VerificationToken`: the raw
+    token exists only in the emailed link, `CsatResponse.tokenHash` is unique, and there
+    is no way for a database copy — or an authenticated API response — to answer a
+    survey on the customer's behalf.
 
 ## 4a. Ticket numbering
 
@@ -382,6 +397,14 @@ call several times without duplicating it.
 Phase 6 adds: unique `AiSettings(organizationId)`, `AiInsight(organizationId,
 ticketId, type, createdAt)` for "latest of each kind on this ticket", and
 `AiInsight(organizationId, createdAt)` for the monthly usage and budget queries.
+
+Phase 7 adds: unique `CsatSettings(organizationId)`, unique `CsatResponse.tokenHash`,
+unique `CsatResponse(organizationId, ticketId)` (one survey per ticket), `CsatResponse
+(organizationId, status, respondedAt)` and `(organizationId, agentId, respondedAt)` for
+the CSAT report; unique `ReportDefinition(organizationId, name)`; `ReportExport
+(organizationId, createdAt)`; unique `TicketDailyMetric(organizationId, day,
+departmentId)` and unique `AgentDailyMetric(organizationId, day, agentId)`, both indexed
+on `(organizationId, day)` for the range scan a report runs.
 
 Phase 4 adds: `KbArticle(status, visibility)`, `KbArticle(categoryId, position)`,
 `KbCategory(parentId, position)`, `WebForm(isActive)`, `CommunityTopic(categoryId,

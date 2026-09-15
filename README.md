@@ -3,7 +3,7 @@
 A multi-tenant customer support platform: ticketing, SLA, automation, knowledge base,
 omnichannel and AI assistance.
 
-**Status: Phases 1–6 implemented.** Authentication, RBAC, organizations, users,
+**Status: Phases 1–7 implemented.** Authentication, RBAC, organizations, users,
 departments, teams, contacts, accounts, the full ticketing core — conversations,
 internal comments, attachments, history, the agent workspace — the operations layer —
 activities, assignment rules, an automation engine with escalations, SLA with business
@@ -11,9 +11,11 @@ hours and a background sweep, blueprint workflows — and self-service: a brande
 center per organization with a knowledge base, web forms, customer accounts, "my
 requests" and a moderated community — and omnichannel: email in and out with real
 threading, live chat, WhatsApp, Instagram, Messenger, Telegram and telephony adapters,
-signed outbound webhooks and API keys — and an AI assistant that summarises a
+signed outbound webhooks and API keys — an AI assistant that summarises a
 conversation, scores sentiment, classifies intent and drafts a reply grounded in the
-knowledge base. Analytics is not built yet, and the UI does not pretend otherwise.
+knowledge base — and analytics: a dashboard, per-report screens for tickets, agents,
+SLA and CSAT, CSV exports rendered in the background, and satisfaction surveys sent on
+resolution and answered through a one-time link with no account behind it.
 
 ```bash
 cp .env.example .env     # set the two JWT secrets
@@ -36,11 +38,13 @@ Then open http://localhost:3000. Full instructions in [SETUP.md](./SETUP.md).
 
 ```
 apps/api       NestJS API and Socket.IO gateway
-apps/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks, AI)
+apps/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks, AI, metric rollups, report exports)
 apps/web       Next.js frontend
 packages/engine  Rule evaluation, actions, business-hours SLA math, assignment, blueprints
 packages/channels Channel adapters (verify, parse, send) and credential encryption
 packages/ai    Assistant providers (Anthropic, built-in), prompts and the analysis path
+packages/analytics Rollups, reports, CSV export and the CSAT survey lifecycle
+packages/storage StorageProvider — local filesystem and S3-compatible, shared by the API and worker
 packages/db    Prisma schema, migrations, seed, tenant-isolation extension
 packages/shared  Zod schemas and types shared by the frontend and backend
 ```
@@ -112,6 +116,14 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 - **API keys** backed by their own service user and role, so an integration is
   authorised, audited and attributed exactly like a person, and revoking one closes
   every path at once.
+- **Analytics and reporting**: a dashboard and four report screens (tickets, agents, SLA,
+  CSAT) reading a mix of daily rollup tables and live queries, self-healing if the
+  worker's rollup sweep has fallen behind rather than trusting its schedule. A CSV
+  export is a queued job the worker renders and writes to the same storage attachments
+  use, downloaded through the same re-authorised path.
+- **Satisfaction surveys**: resolving a ticket schedules exactly one survey and emails a
+  one-time link; the database holds only the link's hash, the public answer page needs
+  no account, and a used or expired link is refused.
 - **AI assistant** behind a provider interface with two real implementations: Anthropic
   (the official SDK, pinned models, a cached system prompt) and a built-in rule-based
   analyser that needs no credentials and no network. It summarises the conversation,
@@ -133,8 +145,9 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | Channel adapters unit (signatures, parsing, threading hints, encryption) | 32 | `pnpm --filter @digisoft/channels test` |
 | Assistant unit (providers, prompts, parsing, retrieval) | 19 | `pnpm --filter @digisoft/ai test` |
 | API unit | 73 | `pnpm --filter @digisoft/api test` |
-| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community, channels, chat, integrations, assistant) | 151 | `pnpm --filter @digisoft/api test:e2e` |
-| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant) | 21 | `pnpm --filter @digisoft/web test:e2e` |
+| API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community, channels, chat, integrations, assistant, analytics/CSAT) | 162 | `pnpm --filter @digisoft/api test:e2e` |
+| Analytics unit (ranges, CSV quoting, survey tokens) | 16 | `pnpm --filter @digisoft/analytics test` |
+| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant, dashboards and reports) | 27 | `pnpm --filter @digisoft/web test:e2e` |
 
 ## Documentation
 
@@ -153,6 +166,7 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | [docs/PHASE-4-PLAN.md](./docs/PHASE-4-PLAN.md) | Phase 4 scope, decisions and status |
 | [docs/PHASE-5-PLAN.md](./docs/PHASE-5-PLAN.md) | Phase 5 scope, decisions and status |
 | [docs/PHASE-6-PLAN.md](./docs/PHASE-6-PLAN.md) | Phase 6 scope, decisions and status |
+| [docs/PHASE-7-PLAN.md](./docs/PHASE-7-PLAN.md) | Phase 7 scope, decisions and status |
 
 ## Roadmap
 
@@ -162,4 +176,4 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 4. ~~**Self-service** — knowledge base, help center, customer portal, web forms, community~~ ✅
 5. ~~**Omnichannel** — email, live chat, WhatsApp, Instagram, Messenger, Telegram, telephony~~ ✅
 6. ~~**AI** — summary, sentiment, intent, suggested reply, KB-grounded answers~~ ✅ (pgvector/RAG later)
-7. **Analytics** — dashboards, reports, agent performance, SLA reporting, CSAT
+7. ~~**Analytics** — dashboards, reports, agent performance, SLA reporting, CSAT~~ ✅

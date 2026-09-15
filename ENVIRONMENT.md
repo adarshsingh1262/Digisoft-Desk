@@ -57,12 +57,16 @@ to Redis is required before running more than one instance behind a load balance
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` | Required when `EMAIL_PROVIDER=smtp` |
 | `AWS_REGION` | Required when `EMAIL_PROVIDER=ses`; credentials come from the standard AWS provider chain |
 
-## Attachment storage
+## Attachment and report storage
+
+`packages/storage` — moved out of the API in Phase 7 so the worker can write report
+exports to the same place the API serves attachments from — is shared by both
+processes and must be configured identically in both.
 
 | Variable | Default | Notes |
 |---|---|---|
 | `STORAGE_PROVIDER` | `local` | `local` writes to disk and streams downloads back through the API; `s3` uses any S3-compatible bucket and hands out short-lived signed URLs |
-| `STORAGE_LOCAL_PATH` | `./storage` | Only used by the `local` provider. Put it on a persistent volume, or use `s3` for anything multi-instance |
+| `STORAGE_LOCAL_PATH` | `./storage` | Only used by the `local` provider. **Set it to an absolute path.** The API and the worker are separate processes with different working directories — a relative path resolves to two different directories, so the worker's report exports would 404 when the API tries to serve them. Put it on a shared, persistent volume (`docker-compose.yml` mounts one), or use `s3` for anything multi-instance |
 | `ATTACHMENT_MAX_BYTES` | `26214400` (25 MB) | Enforced by the service and again by the multipart parser |
 | `S3_BUCKET`, `S3_REGION` | — | Required when `STORAGE_PROVIDER=s3` |
 | `S3_ENDPOINT` | — | Set for MinIO or R2; omit for AWS |
@@ -70,8 +74,9 @@ to Redis is required before running more than one instance behind a load balance
 | `S3_FORCE_PATH_STYLE` | `true` | Needed by MinIO; AWS works either way |
 | `S3_SIGNED_URL_TTL_SECONDS` | `300` | How long a download link stays valid |
 
-The `local` provider keeps files on one node's disk, so it suits development and
-single-node self-hosting. Anything running more than one API instance needs `s3`.
+The `local` provider keeps files on one node's disk (or a volume every node mounts), so
+it suits development and single-node self-hosting. Anything running more than one API
+instance needs `s3`.
 
 ## Worker
 
@@ -79,6 +84,8 @@ single-node self-hosting. Anything running more than one API instance needs `s3`
 |---|---|---|
 | `WORKER_CONCURRENCY` | `5` | Jobs processed in parallel per queue (the SLA sweep always runs one at a time) |
 | `SLA_SCAN_INTERVAL_SECONDS` | `60` | How often the worker sweeps for SLA warnings and breaches; this is the detection resolution |
+| `METRICS_ROLLUP_INTERVAL_SECONDS` | `900` | How often the worker recomputes ticket/agent daily rollups (also runs inline on a stale report request; see Phase 7 below) |
+| `METRICS_ROLLUP_DAYS` | `2` | How many recent days each sweep recomputes |
 
 ## Frontend
 
@@ -122,3 +129,16 @@ default and needs nothing. Two existing ones matter to it:
 The Anthropic API key is per organization and is entered in the app (Settings →
 Assistant), not in the environment, so two tenants on one deployment bill separately and
 neither key is readable from the API.
+
+## Phase 7 — analytics, reporting and CSAT
+
+Phase 7 introduced no required environment variables beyond `STORAGE_LOCAL_PATH` needing
+to be absolute now that the worker writes report exports to it (see *Attachment and
+report storage* above). `METRICS_ROLLUP_INTERVAL_SECONDS` and `METRICS_ROLLUP_DAYS`
+(*Worker*, above) tune the rollup sweep; a report is self-healing regardless of that
+schedule, since a request recomputes stale recent days itself before answering.
+
+Satisfaction-survey emails go out through the same `EMAIL_PROVIDER` configuration as
+every other email (*Email*, above); the survey link is built from `FRONTEND_URL` and the
+organization's help center slug, so an organization needs one for surveys to have
+anywhere to send the customer.

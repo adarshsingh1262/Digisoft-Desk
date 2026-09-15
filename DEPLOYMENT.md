@@ -61,10 +61,16 @@ starting instances cannot migrate concurrently.
 - [ ] Database backups and point-in-time recovery enabled.
 - [ ] Log shipping configured; the API emits structured JSON with credentials redacted.
 - [ ] `/api/v1/health` wired to the load balancer health check.
+- [ ] `STORAGE_LOCAL_PATH` is an absolute path on a volume the API and the worker both
+      mount (or `STORAGE_PROVIDER=s3`) — the two are separate processes with separate
+      working directories, so a relative path resolves to two different places and a
+      report export the worker wrote becomes a 404 when the API tries to serve it.
 
 ## Scaling notes
 
 - Socket.IO uses the Redis adapter, so API instances share rooms and a client can connect to any of them.
 - BullMQ workers are horizontally scalable; queue concurrency is `WORKER_CONCURRENCY` per process.
 - Every tenant-scoped query is indexed on `organizationId` first (see DATABASE.md).
-- Reporting will move to rollup tables in Phase 7 so dashboards never scan the ticket table.
+- Reporting reads daily rollup tables (`TicketDailyMetric` / `AgentDailyMetric`) rather
+  than scanning the ticket table; a report request recomputes the last two days inline
+  if the worker's sweep has fallen behind (§ `docs/PHASE-7-PLAN.md`).

@@ -16,6 +16,9 @@ coverage/
 /tmp-pg/
 test-results/
 playwright-report/
-# Local attachment storage (STORAGE_PROVIDER=local), not the storage source module.
+# Local attachment/report storage (STORAGE_PROVIDER=local), not the storage source module.
 /storage/
 apps/api/storage/
+apps/worker/storage/
+.storage/
+dump.rdb

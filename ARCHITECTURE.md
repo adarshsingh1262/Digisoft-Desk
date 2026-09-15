@@ -77,12 +77,13 @@ Digisoft-Desk/
 │   │   │   ├── chat/             # live chat sessions, visitor socket, agent inbox
 │   │   │   ├── integrations/     # outbound webhooks and API keys
 │   │   │   ├── ai/               # assistant settings, insights, usage, dispatch
+│   │   │   ├── analytics/        # dashboard, reports, exports, report definitions, CSAT
 │   │   │   └── (analytics arrives in a later phase)
 │   │   ├── test/                 # integration suites against a real database
 │   │   └── Dockerfile
 │   │
 │   ├── worker/                   # BullMQ consumers; no HTTP surface
-│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook, ai
+│   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook, ai, analytics
 │   │   └── Dockerfile
 │   │
 │   └── web/                      # Next.js App Router
@@ -97,6 +98,8 @@ Digisoft-Desk/
 │   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
 │   ├── channels/                 # channel adapters (verify, parse, send) + credential encryption
 │   ├── ai/                       # assistant providers, prompts, grounding and the analysis path
+│   ├── analytics/                # rollups, reports, CSV export, CSAT survey lifecycle
+│   ├── storage/                  # StorageProvider — local filesystem and S3-compatible
 │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
 │   ├── shared/                   # Zod schemas + types shared by frontend and backend
 │   └── tsconfig/                 # strict TypeScript bases
@@ -288,7 +291,10 @@ Four rules hold whichever provider is configured:
 
 ## 5a. File storage
 
-`StorageProvider` has two real implementations, chosen by `STORAGE_PROVIDER`:
+`packages/storage` holds `StorageProvider` and both its implementations, chosen by
+`STORAGE_PROVIDER`; it moved out of the API in Phase 7 so the worker can write report
+exports to the same place the API serves attachments from, with one provider
+implementation instead of two copies that could drift:
 
 - **local** — writes under `STORAGE_LOCAL_PATH` and streams downloads back through the
   API. Suits development and single-node self-hosting; the path is resolved once and
@@ -301,7 +307,36 @@ keeps one validation and authorization path (size, MIME allowlist, tenant, ticke
 visibility) for both providers, and means the local provider is a real option rather
 than a stub. Storage keys are generated server-side as
 `{organizationId}/tickets/{ticketId}/{uuid}{ext}` and never derived from the uploaded
-filename.
+filename. A report export follows the same rule under `exports/{organizationId}/
+{exportId}.csv`, written by the worker and downloaded through the API.
+
+## 5f. Reporting and CSAT
+
+`packages/analytics` is a third library alongside the engine and the assistant, with the
+same shape: it takes an unscoped Prisma client and an explicit `organizationId`, and both
+the API (inside the tenant context) and the worker (without one) call the same functions.
+
+- **Reports read a mix of rollups and live queries.** `TicketDailyMetric` and
+  `AgentDailyMetric` hold one row per organization/day/(department or agent), recomputed
+  by a worker sweep (`rollupRecent`) that re-rolls the last two days on every pass — a
+  ticket resolved today changes the day it was *created* on, so recent days are
+  recomputed rather than appended to. Anything the rollup cannot answer without widening
+  it (an agent or priority filter beyond the day/department grain) reads the ticket table
+  directly with the same date-range predicate. Either path, the answer is the same;
+  which one runs is an implementation detail.
+- **A report is never older than two minutes.** Before answering, the API checks
+  whether today's and yesterday's rollup rows are fresh (`ensureRecentRollup`) and
+  recomputes them inline if not — a dashboard opened moments after a ticket closes does
+  not wait for the worker's timer.
+- **An export is a queued job.** `POST /reports/export` writes a `ReportExport` row and
+  returns immediately; the worker renders the same report to CSV and writes it through
+  `StorageProvider`, so a heavy export never blocks a request and never runs twice for
+  the same row.
+- **A CSAT survey is scheduled, never polled for.** `TicketsService` calls
+  `CsatService.onTicketResolved` exactly once — only on the transition *into* a resolved
+  status the ticket had not already reached — which writes one `CsatResponse` row and
+  queues the email. The row's `tokenHash` is the only credential the public endpoints
+  accept; like a password-reset token, the raw value exists solely in the email.
 
 ## 6. Non-functional commitments
 
