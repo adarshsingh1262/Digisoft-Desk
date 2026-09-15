@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { DownloadTarget, StorageProvider, StoredObject } from '../storage.types';
+import type { DownloadTarget, StorageProvider, StoredObject } from '../types';
 
 /**
  * Filesystem-backed storage for development and self-hosted single-node installs.

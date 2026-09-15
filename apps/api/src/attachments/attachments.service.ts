@@ -11,7 +11,7 @@ import {
   STORAGE_PROVIDER,
   type DownloadTarget,
   type StorageProvider,
-} from '../storage/storage.types';
+} from '@digisoft/storage';
 import { TicketsService } from '../tickets/tickets.service';
 
 export interface UploadedFile {

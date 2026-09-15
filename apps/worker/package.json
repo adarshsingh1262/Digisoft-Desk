@@ -20,7 +20,9 @@
     "@digisoft/db": "workspace:*",
     "@digisoft/engine": "workspace:*",
     "@digisoft/channels": "workspace:*",
-    "@digisoft/ai": "workspace:*"
+    "@digisoft/ai": "workspace:*",
+    "@digisoft/storage": "workspace:*",
+    "@digisoft/analytics": "workspace:*"
   },
   "devDependencies": {
     "@digisoft/tsconfig": "workspace:*",

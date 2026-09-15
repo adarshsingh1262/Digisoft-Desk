@@ -26,6 +26,21 @@ const schema = z.object({
   CHANNEL_ENCRYPTION_KEY: z.string().optional(),
   /** Attempts per outbound webhook delivery before it is marked failed. */
   WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+
+  /** Where report exports are written. Must match the API, or downloads 404. */
+  STORAGE_PROVIDER: z.enum(['local', 's3']).default('local'),
+  STORAGE_LOCAL_PATH: z.string().default('./storage'),
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_ENDPOINT: z.string().optional(),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: bool.default(false),
+  S3_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  /** How often the metric rollup sweep runs. */
+  METRICS_ROLLUP_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(900),
+  /** How many recent days each sweep recomputes. */
+  METRICS_ROLLUP_DAYS: z.coerce.number().int().min(1).max(31).default(2),
 });
 
 export type WorkerEnv = z.infer<typeof schema>;

@@ -7,7 +7,7 @@ import type { ChannelType } from '@digisoft/shared';
 import { TENANT_PRISMA } from '../prisma/prisma.module';
 import { TicketsService } from '../tickets/tickets.service';
 import { TicketMessagesService } from '../tickets/ticket-messages.service';
-import { STORAGE_PROVIDER, type StorageProvider } from '../storage/storage.types';
+import { STORAGE_PROVIDER, type StorageProvider } from '@digisoft/storage';
 import { AppConfig } from '../config/config.module';
 
 /** Channel type → the ticket source recorded on the ticket and its messages. */

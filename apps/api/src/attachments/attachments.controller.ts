@@ -70,6 +70,11 @@ export class AttachmentsController {
     // Stops a stored SVG or HTML file from executing in the product's own origin.
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // A file missing from storage must fail this request, not the process.
+    target.stream.on('error', () => {
+      if (!res.headersSent) res.status(500);
+      res.end();
+    });
     target.stream.pipe(res);
   }
 

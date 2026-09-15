@@ -1,0 +1,20 @@
+{
+  "name": "@digisoft/storage",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.850.0",
+    "@aws-sdk/s3-request-presigner": "^3.850.0"
+  },
+  "devDependencies": {
+    "@digisoft/tsconfig": "workspace:*",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.7.3"
+  }
+}
