@@ -65,6 +65,9 @@ services:
     ports: ['4000:4000']
     depends_on:
       redis: { condition: service_healthy }
+      # postgres only exists under --profile local-db; required: false lets api
+      # start without it when pointed at a managed database instead.
+      postgres: { condition: service_healthy, required: false }
     command: sh -c "cd /app && pnpm --filter @digisoft/db migrate:deploy && cd apps/api && node dist/main.js"
 
   worker:
@@ -89,6 +92,7 @@ services:
     volumes: ['file-storage:/var/lib/digisoft/storage']
     depends_on:
       redis: { condition: service_healthy }
+      postgres: { condition: service_healthy, required: false }
 
   web:
     build:
