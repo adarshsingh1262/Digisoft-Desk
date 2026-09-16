@@ -1,9 +1,10 @@
-import type { LoginInput, LoginResponse, RegisterInput } from '@digisoft/shared';
+import type { LoginInput, LoginResponse, LoginResult, RegisterInput } from '@digisoft/shared';
 import { apiGet, apiPost } from '@/lib/api-client';
 import type { AuthenticatedUser } from '@digisoft/shared';
 
 export const authService = {
-  login: (input: LoginInput) => apiPost<LoginResponse>('/auth/login', input),
+  /** May come back asking which organization to sign into — see `LoginResult`. */
+  login: (input: LoginInput) => apiPost<LoginResult>('/auth/login', input),
   register: (input: RegisterInput) => apiPost<LoginResponse>('/auth/register', input),
   logout: () => apiPost<{ loggedOut: true }>('/auth/logout'),
   me: () => apiGet<AuthenticatedUser>('/auth/me'),

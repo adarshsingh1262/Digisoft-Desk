@@ -5,6 +5,7 @@ import type {
   ForgotPasswordInput,
   LoginInput,
   LoginResponse,
+  OrganizationChoiceResponse,
   RegisterInput,
   ResetPasswordInput,
 } from '@digisoft/shared';
@@ -128,7 +129,7 @@ export class AuthService {
     return this.createSession(userId, organizationId, meta);
   }
 
-  async login(input: LoginInput, meta: RequestMeta): Promise<SessionResult> {
+  async login(input: LoginInput, meta: RequestMeta): Promise<SessionResult | OrganizationChoiceResponse> {
     const candidates = await this.prisma.user.findMany({
       where: {
         email: input.email,
@@ -137,25 +138,52 @@ export class AuthService {
           ? { organization: { slug: input.organizationSlug, deletedAt: null } }
           : { organization: { deletedAt: null } }),
       },
-      select: { id: true, organizationId: true, passwordHash: true, isActive: true },
+      select: {
+        id: true,
+        organizationId: true,
+        passwordHash: true,
+        isActive: true,
+        organization: { select: { name: true, slug: true } },
+      },
     });
 
-    if (candidates.length > 1) {
-      throw AppError.validation(
-        'This email address is used in more than one organization. Include your organization address to sign in.',
-      );
+    // The same email can be a distinct account in more than one organization, each with
+    // its own password — so which one the caller means isn't known until the password is
+    // checked against each. Verifying every candidate (rather than stopping at the first)
+    // also means a wrong password looks identical whether the email exists in zero, one
+    // or five organizations — nothing here leaks membership to a guess.
+    const verified: typeof candidates = [];
+    for (const candidate of candidates) {
+      if (await this.passwords.verify(candidate.passwordHash, input.password)) {
+        verified.push(candidate);
+      }
+    }
+    if (candidates.length === 0) {
+      // Still pay the hashing cost so a nonexistent email takes the same time as a wrong
+      // password against a real one.
+      await this.passwords.verify(null, input.password);
     }
 
-    const candidate = candidates[0];
-    // Always run a verification so a missing account costs the same as a wrong password.
-    const matches = await this.passwords.verify(
-      candidate?.passwordHash ?? null,
-      input.password,
-    );
-
-    if (!candidate || !matches) {
+    if (verified.length === 0) {
       throw AppError.unauthenticated('Incorrect email address or password', 'INVALID_CREDENTIALS');
     }
+
+    if (verified.length > 1) {
+      if (input.organizationSlug) {
+        // The slug already narrowed the query to one organization; more than one
+        // verified match here would mean two active accounts for the same email in the
+        // same org, which the unique constraint on (organizationId, email) prevents.
+        throw AppError.unauthenticated('Incorrect email address or password', 'INVALID_CREDENTIALS');
+      }
+      return {
+        status: 'choose_organization',
+        organizations: verified
+          .map((c) => ({ slug: c.organization.slug, name: c.organization.name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    }
+
+    const candidate = verified[0]!;
     if (!candidate.isActive) {
       throw AppError.unauthenticated('This account has been deactivated', 'ACCOUNT_DISABLED');
     }
@@ -421,6 +449,7 @@ export class AuthService {
     });
 
     return {
+      status: 'authenticated',
       accessToken,
       expiresIn: this.tokens.accessTokenTtlSeconds,
       user: resolved,

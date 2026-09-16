@@ -1,10 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { registerSchema, type RegisterFormValues, type RegisterInput } from '@digisoft/shared';
+import {
+  registerSchema,
+  slugify,
+  type RegisterFormValues,
+  type RegisterInput,
+} from '@digisoft/shared';
 import { ApiError } from '@/lib/api-client';
 import { authService } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/auth.store';
@@ -22,16 +28,30 @@ export function RegisterForm() {
   const setSession = useAuthStore((state) => state.setSession);
 
   const hydrated = useHydrated();
+  // Once the address is hand-edited, typing in the name field stops overwriting it —
+  // the same rule the knowledge base article editor's slug field follows.
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues, unknown, RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: { timezone: TIMEZONE || 'UTC' },
   });
+
+  const name = watch('organizationName');
+  const slug = watch('organizationSlug');
+
+  useEffect(() => {
+    if (!slugTouched) {
+      setValue('organizationSlug', slugify(name ?? ''), { shouldValidate: false });
+    }
+  }, [name, slugTouched, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -69,10 +89,14 @@ export function RegisterForm() {
             label="Organization address"
             htmlFor="organizationSlug"
             error={errors.organizationSlug?.message}
-            hint="Lowercase letters, digits and hyphens. Used when signing in."
+            hint={`Your help center: /help/${slug || 'your-organization'} — used to sign in when your email is shared across organizations`}
             required
           >
-            <Input {...register('organizationSlug')} />
+            <Input
+              {...register('organizationSlug', {
+                onChange: () => setSlugTouched(true),
+              })}
+            />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">

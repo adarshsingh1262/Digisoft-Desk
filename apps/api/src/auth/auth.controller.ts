@@ -13,6 +13,7 @@ import {
   type ForgotPasswordInput,
   type LoginInput,
   type LoginResponse,
+  type LoginResult,
   type RegisterInput,
   type ResetPasswordInput,
   type VerifyEmailInput,
@@ -53,9 +54,15 @@ export class AuthController {
     @Body(zodBody(loginSchema)) dto: LoginInput,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<LoginResponse> {
-    const session = await this.auth.login(dto, this.meta(req));
-    return this.respondWithSession(res, session);
+  ): Promise<LoginResult> {
+    const result = await this.auth.login(dto, this.meta(req));
+    // The same credentials matched more than one organization: hand back the choices
+    // rather than a session — no token is issued and no cookie is set until the caller
+    // resubmits with organizationSlug set to one of them.
+    if (result.status === 'choose_organization') {
+      return result;
+    }
+    return this.respondWithSession(res, result);
   }
 
   @Public()
@@ -148,6 +155,7 @@ export class AuthController {
     const maxAge = session.refreshTokenExpiresAt.getTime() - Date.now();
     res.cookie(REFRESH_COOKIE, session.refreshToken, this.cookieOptions(maxAge));
     return {
+      status: 'authenticated',
       accessToken: session.accessToken,
       expiresIn: session.expiresIn,
       user: session.user,

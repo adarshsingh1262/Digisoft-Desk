@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ChevronRight } from 'lucide-react';
 import { loginSchema, type LoginInput } from '@digisoft/shared';
 import { ApiError } from '@/lib/api-client';
 import { authService } from '@/services/auth.service';
@@ -15,16 +16,28 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+type OrganizationChoice = { slug: string; name: string };
+
+/**
+ * A one-screen sign-in: email and password only, no organization address up front. The
+ * same address can be a distinct account in more than one organization — the server
+ * checks the password against every one of them, and only asks which organization to
+ * enter when more than one actually matched.
+ */
 export function LoginForm() {
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);
   const status = useAuthStore((state) => state.status);
-
   const hydrated = useHydrated();
+
+  const [organizations, setOrganizations] = useState<OrganizationChoice[] | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [chooseError, setChooseError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    getValues,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
@@ -37,8 +50,12 @@ export function LoginForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      const session = await authService.login(values);
-      setSession(session.user, session.accessToken);
+      const result = await authService.login(values);
+      if (result.status === 'choose_organization') {
+        setOrganizations(result.organizations);
+        return;
+      }
+      setSession(result.user, result.accessToken);
       router.replace('/dashboard');
     } catch (error) {
       const message =
@@ -46,6 +63,78 @@ export function LoginForm() {
       setError('root', { message });
     }
   });
+
+  const chooseOrganization = async (slug: string) => {
+    setChoosing(true);
+    setChooseError(null);
+    try {
+      const { email, password } = getValues();
+      const result = await authService.login({ email, password, organizationSlug: slug });
+      if (result.status === 'choose_organization') {
+        // Can only happen if the password changed between the two requests.
+        throw new ApiError('INVALID_CREDENTIALS', 'Incorrect email address or password', 401);
+      }
+      setSession(result.user, result.accessToken);
+      router.replace('/dashboard');
+    } catch (error) {
+      setChooseError(
+        error instanceof ApiError ? error.message : 'Unable to sign in. Please try again.',
+      );
+    } finally {
+      setChoosing(false);
+    }
+  };
+
+  if (organizations) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Choose an organization</CardTitle>
+          <CardDescription>
+            Your email address is used to sign in to more than one organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
+            {organizations.map((org) => (
+              <li key={org.slug}>
+                <button
+                  type="button"
+                  disabled={choosing}
+                  onClick={() => chooseOrganization(org.slug)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <span>
+                    <span className="block font-medium">{org.name}</span>
+                    <span className="block text-xs text-muted-foreground">{org.slug}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {chooseError ? (
+            <p role="alert" className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {chooseError}
+            </p>
+          ) : null}
+
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 w-full"
+            onClick={() => {
+              setOrganizations(null);
+              setChooseError(null);
+            }}
+          >
+            Back
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -61,15 +150,6 @@ export function LoginForm() {
 
           <Field label="Password" htmlFor="password" error={errors.password?.message} required>
             <Input type="password" autoComplete="current-password" {...register('password')} />
-          </Field>
-
-          <Field
-            label="Organization address"
-            htmlFor="organizationSlug"
-            error={errors.organizationSlug?.message}
-            hint="Only needed if your email is used in more than one organization."
-          >
-            <Input autoComplete="organization" {...register('organizationSlug')} />
           </Field>
 
           {errors.root ? (

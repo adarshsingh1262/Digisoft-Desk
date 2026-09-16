@@ -35,7 +35,6 @@ test('signs in, creates a contact and finds it in the list', async ({ page }) =>
   await page.goto('/login');
   await page.getByLabel('Email address').fill(org.email);
   await page.getByLabel(/^Password/).fill(org.password);
-  await page.getByLabel('Organization address').fill(org.slug);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 

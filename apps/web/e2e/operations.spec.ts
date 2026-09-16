@@ -14,7 +14,6 @@ async function signIn(page: import('@playwright/test').Page) {
   await page.goto('/login');
   await page.getByLabel('Email address').fill(org.email);
   await page.getByLabel(/^Password/).fill(org.password);
-  await page.getByLabel('Organization address').fill(org.slug);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }

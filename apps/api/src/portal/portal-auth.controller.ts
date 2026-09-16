@@ -93,6 +93,7 @@ export class PortalAuthController {
       maxAge,
     });
     return {
+      status: 'authenticated',
       accessToken: session.accessToken,
       expiresIn: session.expiresIn,
       user: session.user,

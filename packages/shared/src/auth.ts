@@ -70,7 +70,23 @@ export interface AuthenticatedUser {
 }
 
 export interface LoginResponse {
+  status: 'authenticated';
   accessToken: string;
   expiresIn: number;
   user: AuthenticatedUser;
 }
+
+/**
+ * The same email address is a distinct account in each organization it belongs to, so a
+ * password alone can't say which one the caller means. Returned instead of a session
+ * when the credentials the caller gave match more than one — no token is issued and no
+ * session cookie is set until the caller resubmits with `organizationSlug` set to one of
+ * these. The org's own name is shown to pick from; its slug is what actually
+ * disambiguates the next request.
+ */
+export interface OrganizationChoiceResponse {
+  status: 'choose_organization';
+  organizations: { slug: string; name: string }[];
+}
+
+export type LoginResult = LoginResponse | OrganizationChoiceResponse;

@@ -187,4 +187,63 @@ describe('Authentication (e2e)', () => {
         .expect(200);
     });
   });
+
+  describe('when the same address is registered in more than one organization', () => {
+    const OTHER_ORG = {
+      organizationName: 'Second Auth Test Co',
+      organizationSlug: 'auth-test-second',
+      firstName: 'Beth',
+      lastName: 'Admin',
+      email: ORG.email,
+      password: 'An0therPassword2',
+    };
+
+    beforeEach(async () => {
+      await register().expect(201);
+      await request(http).post(apiPath('/auth/register')).send(OTHER_ORG).expect(201);
+    });
+
+    it('asks which organization to sign into instead of starting a session', async () => {
+      const response = await request(http)
+        .post(apiPath('/auth/login'))
+        .send({ email: ORG.email, password: ORG.password })
+        .expect(200);
+
+      expect(response.body.data).toEqual({
+        status: 'choose_organization',
+        organizations: [
+          { slug: ORG.organizationSlug, name: ORG.organizationName },
+          { slug: OTHER_ORG.organizationSlug, name: OTHER_ORG.organizationName },
+        ],
+      });
+      expect(response.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('completes sign-in once the chosen organization is resubmitted', async () => {
+      const response = await request(http)
+        .post(apiPath('/auth/login'))
+        .send({ email: ORG.email, password: ORG.password, organizationSlug: ORG.organizationSlug })
+        .expect(200);
+
+      expect(response.body.data.status).toBe('authenticated');
+      expect(response.body.data.user.email).toBe(ORG.email);
+      const cookie = (response.headers['set-cookie'] as unknown as string[])[0];
+      expect(cookie).toContain('ds_refresh=');
+    });
+
+    it('gives the same generic answer for a wrong password whether the address is shared or not', async () => {
+      const shared = await request(http)
+        .post(apiPath('/auth/login'))
+        .send({ email: ORG.email, password: 'Wr0ngPassword1' })
+        .expect(401);
+      const single = await request(http)
+        .post(apiPath('/auth/login'))
+        .send({ email: 'nobody@auth-test.example', password: 'Wr0ngPassword1' })
+        .expect(401);
+
+      expect(shared.body.error).toEqual(single.body.error);
+      expect(shared.body.error.code).toBe('INVALID_CREDENTIALS');
+      expect(shared.headers['set-cookie']).toBeUndefined();
+    });
+  });
 });
