@@ -60,7 +60,7 @@ export const envSchema = z.object({
    */
   CHANNEL_ENCRYPTION_KEY: z.string().optional(),
   /** Public base URL providers post webhooks to; defaults to BACKEND_URL. */
-  PUBLIC_API_URL: z.string().url().optional(),
+  PUBLIC_API_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   /** Retry budget for one outbound webhook delivery before it is marked failed. */
   WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
 });
