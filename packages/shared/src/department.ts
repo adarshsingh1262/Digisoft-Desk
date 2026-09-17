@@ -21,6 +21,7 @@ export const createTeamSchema = z.object({
   memberIds: z.array(z.string().min(1)).default([]),
 });
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type TeamFormValues = z.input<typeof createTeamSchema>;
 export const updateTeamSchema = createTeamSchema.partial();
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 
