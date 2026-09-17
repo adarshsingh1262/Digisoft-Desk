@@ -159,7 +159,7 @@ export default function DepartmentsSettingsPage() {
               label="Support email"
               htmlFor="email"
               error={errors.email?.message}
-              hint="Used to route inbound email from Phase 5."
+              hint="Used to route inbound email to this department."
             >
               <Input type="email" {...register('email')} />
             </Field>

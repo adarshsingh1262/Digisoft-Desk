@@ -105,7 +105,7 @@ export default function OrganizationSettingsPage() {
               label="Support domain"
               htmlFor="domain"
               error={errors.domain?.message}
-              hint="Used for email routing from Phase 5."
+              hint="Used to route inbound email to this organization."
             >
               <Input disabled={!editable} {...register('domain')} />
             </Field>
@@ -144,7 +144,7 @@ export default function OrganizationSettingsPage() {
         <CardHeader>
           <CardTitle>Business hours</CardTitle>
           <CardDescription>
-            Working windows the SLA engine will use once Phase 3 lands.
+            Working windows the SLA engine measures first-response and resolution targets against.
           </CardDescription>
         </CardHeader>
         <CardContent>

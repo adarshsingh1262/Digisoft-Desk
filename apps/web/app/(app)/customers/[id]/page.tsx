@@ -8,14 +8,17 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import { PERMISSIONS } from '@digisoft/shared';
 import { ApiError } from '@/lib/api-client';
 import { contactsService } from '@/services/contacts.service';
+import { ticketsService } from '@/services/tickets.service';
+import { activitiesService } from '@/services/activities.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { formatDateTime } from '@/lib/utils';
 import { PageHeader } from '@/components/layout/page-header';
 import { ContactFormDialog } from '@/components/customers/contact-form-dialog';
+import { PriorityBadge, StatusBadge } from '@/components/tickets/ticket-badges';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ErrorState, LoadingState } from '@/components/ui/states';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -35,6 +38,16 @@ export default function ContactDetailPage() {
   const contact = useQuery({
     queryKey: ['contacts', params.id],
     queryFn: () => contactsService.get(params.id),
+  });
+  const tickets = useQuery({
+    queryKey: ['tickets', 'contact', params.id],
+    queryFn: () => ticketsService.list({ page: 1, pageSize: 10, contactId: params.id, sort: 'updatedAt', order: 'desc' }),
+    enabled: contact.isSuccess,
+  });
+  const activities = useQuery({
+    queryKey: ['activities', 'contact', params.id],
+    queryFn: () => activitiesService.list({ page: 1, pageSize: 10, contactId: params.id }),
+    enabled: contact.isSuccess,
   });
 
   if (contact.isPending) {
@@ -110,11 +123,56 @@ export default function ContactDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Tickets & activity</CardTitle>
-            <CardDescription>Arrives with the ticketing module in Phase 2.</CardDescription>
+            <CardTitle>Tickets</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            This contact has no ticket history yet because ticketing is not implemented.
+          <CardContent>
+            {tickets.isPending ? (
+              <LoadingState />
+            ) : tickets.isError ? (
+              <ErrorState message="Unable to load tickets." onRetry={() => tickets.refetch()} />
+            ) : tickets.data.items.length === 0 ? (
+              <EmptyState title="No tickets yet" description="Tickets this contact raises will show up here." />
+            ) : (
+              <ul className="divide-y divide-border">
+                {tickets.data.items.map((ticket) => (
+                  <li key={ticket.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <Link href={`/tickets/${ticket.id}`} className="truncate font-medium hover:underline">
+                      #{ticket.ticketNumber} {ticket.subject}
+                    </Link>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <PriorityBadge priority={ticket.priority} />
+                      <StatusBadge status={ticket.status} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Activities</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activities.isPending ? (
+              <LoadingState />
+            ) : activities.isError ? (
+              <ErrorState message="Unable to load activities." onRetry={() => activities.refetch()} />
+            ) : activities.data.items.length === 0 ? (
+              <EmptyState title="No activities yet" description="Tasks, calls and events logged for this contact will show up here." />
+            ) : (
+              <ul className="divide-y divide-border">
+                {activities.data.items.map((activity) => (
+                  <li key={activity.id} className="py-2 text-sm">
+                    <p className="font-medium">{activity.subject}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.type.charAt(0) + activity.type.slice(1).toLowerCase()} · {formatDateTime(activity.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>

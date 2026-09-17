@@ -43,6 +43,7 @@ export const createRoleSchema = z.object({
   permissionKeys: z.array(z.string().min(1)).default([]),
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
+export type RoleFormValues = z.input<typeof createRoleSchema>;
 
 export const updateRoleSchema = createRoleSchema.partial();
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
