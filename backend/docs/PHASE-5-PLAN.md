@@ -57,7 +57,7 @@ channel needs a provider that can POST.
 
 | Bug | Consequence if shipped |
 |---|---|
-| `packages/db` was not rebuilt after the new models were added to the tenant extension | `Channel`, `ChatSession`, `ApiKey` and the webhook tables would have been **unscoped**: one organization could list another's channels. Caught by the cross-tenant channel test |
+| `backend/packages/db` was not rebuilt after the new models were added to the tenant extension | `Channel`, `ChatSession`, `ApiKey` and the webhook tables would have been **unscoped**: one organization could list another's channels. Caught by the cross-tenant channel test |
 | API-key principals first used a synthetic id (`apikey:<id>`) | Every ownership column (`createdById`, followers, activities) would have failed its foreign key the moment a key created anything |
 | Circular provider dependency (outbound → chat → ticket messages → outbound) | The API would not have booted once chat delivery was wired in |
 | Channel send failures were invisible | An expired token would have failed silently in the worker; failures now land on the channel and show as an error state in the UI |

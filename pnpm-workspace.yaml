@@ -1,6 +1,8 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+  - 'frontend'
+  - 'backend/api'
+  - 'backend/worker'
+  - 'backend/packages/*'
 
 # Native/codegen packages that need their install scripts to run.
 onlyBuiltDependencies:

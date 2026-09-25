@@ -2,7 +2,7 @@
 
 `.env` at the repository root is read by every app. `.env.example` lists the full set
 with safe defaults. The API validates its environment at boot with a Zod schema
-(`apps/api/src/config/env.schema.ts`) and **refuses to start** on anything missing or
+(`backend/api/src/config/env.schema.ts`) and **refuses to start** on anything missing or
 malformed, so a misconfiguration fails immediately instead of at the first request.
 
 Never commit a real `.env`. It is in `.gitignore`.
@@ -59,7 +59,7 @@ to Redis is required before running more than one instance behind a load balance
 
 ## Attachment and report storage
 
-`packages/storage` — moved out of the API in Phase 7 so the worker can write report
+`backend/packages/storage` — moved out of the API in Phase 7 so the worker can write report
 exports to the same place the API serves attachments from — is shared by both
 processes and must be configured identically in both.
 

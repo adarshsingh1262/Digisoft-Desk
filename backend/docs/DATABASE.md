@@ -3,8 +3,8 @@
 > Status: **Phases 1–5 are implemented and migrated.** Later-phase tables are planned
 > shapes, not yet created.
 
-Schema, migrations and seed live in `packages/db`. The initial migration is
-`packages/db/prisma/migrations/*_init`.
+Schema, migrations and seed live in `backend/packages/db`. The initial migration is
+`backend/packages/db/prisma/migrations/*_init`.
 
 PostgreSQL 16 + Prisma. JSONB is used only where fields are genuinely user-configurable (custom fields, automation rule bodies, form schemas, audit diffs).
 
@@ -59,7 +59,7 @@ Organization (tenant root)
 - Money/duration: minutes as `Int`; all timestamps `timestamptz`.
 - `customFields Json?` on `Ticket`, `Contact`, `Account`.
 
-## 3. Phase 1 schema (`packages/db/prisma/schema.prisma`)
+## 3. Phase 1 schema (`backend/packages/db/prisma/schema.prisma`)
 
 ```prisma
 model Organization {
@@ -365,7 +365,7 @@ backstop, and a concurrency test asserts five simultaneous creates produce 1–5
 
 ## 5. Isolation in the data layer
 
-`packages/db/src/tenant.extension.ts` wraps every Prisma operation:
+`backend/packages/db/src/tenant.extension.ts` wraps every Prisma operation:
 
 - reads, updates and deletes against a tenant-owned model get `organizationId` merged
   into `where` — a caller-supplied value is overwritten, never trusted;
@@ -376,7 +376,7 @@ backstop, and a concurrency test asserts five simultaneous creates produce 1–5
 
 The rewriting logic is a pure function (`scopeArgs`) so the rules are unit tested
 directly, and the guarantee is tested again end to end in
-`apps/api/test/tenant-isolation.e2e-spec.ts`.
+`backend/api/test/tenant-isolation.e2e-spec.ts`.
 
 Join tables (`UserRole`, `UserDepartment`, `TeamMember`, `RolePermission`) carry no
 `organizationId`; they are only reachable through a parent row whose ownership the

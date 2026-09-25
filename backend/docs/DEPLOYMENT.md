@@ -23,15 +23,15 @@ before exposing it publicly.
                  (same image, different command)
 ```
 
-The worker runs the same code as the API but starts `apps/worker`, so it scales
+The worker runs the same code as the API but starts `backend/worker`, so it scales
 independently of request traffic.
 
 ## Build
 
 ```bash
-docker build -f apps/api/Dockerfile   -t digisoft-api    .
-docker build -f apps/worker/Dockerfile -t digisoft-worker .
-docker build -f apps/web/Dockerfile   -t digisoft-web    .
+docker build -f backend/api/Dockerfile   -t digisoft-api    .
+docker build -f backend/worker/Dockerfile -t digisoft-worker .
+docker build -f frontend/Dockerfile   -t digisoft-web    .
 ```
 
 Each Dockerfile takes the repository root as its build context because the apps share
@@ -73,4 +73,4 @@ starting instances cannot migrate concurrently.
 - Every tenant-scoped query is indexed on `organizationId` first (see DATABASE.md).
 - Reporting reads daily rollup tables (`TicketDailyMetric` / `AgentDailyMetric`) rather
   than scanning the ticket table; a report request recomputes the last two days inline
-  if the worker's sweep has fallen behind (§ `docs/PHASE-7-PLAN.md`).
+  if the worker's sweep has fallen behind (§ `PHASE-7-PLAN.md`).

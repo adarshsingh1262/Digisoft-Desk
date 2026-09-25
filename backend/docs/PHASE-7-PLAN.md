@@ -9,7 +9,7 @@
 
 | Area | Detail |
 |---|---|
-| `packages/analytics` | A library alongside the engine and the assistant: takes an unscoped Prisma client and an explicit `organizationId`, so the API (tenant-scoped) and the worker (unscoped) call the same functions |
+| `backend/packages/analytics` | A library alongside the engine and the assistant: takes an unscoped Prisma client and an explicit `organizationId`, so the API (tenant-scoped) and the worker (unscoped) call the same functions |
 | Rollups | `TicketDailyMetric` / `AgentDailyMetric`, one row per organization/day/(department or agent). A worker sweep recomputes the last two days on every pass — a ticket resolved today changes the day it was *created* on — and a report request recomputes them inline first if they are more than two minutes stale, so a report is never behind the worker's schedule |
 | Dashboard | One call (`GET /dashboard`) merging ticket volume, SLA compliance, CSAT and the top five agents by resolutions, for a `range`/`departmentId`/`agentId` filter set |
 | Reports | Four report kinds — Tickets (volume, trend, breakdowns by priority/status/channel/department), Agents (per-agent activity and CSAT), SLA (compliance, at-risk, breached-open, by policy), CSAT (ratings, distribution, comments) |
@@ -29,7 +29,7 @@
    implied dashboards read whatever the worker last wrote; the implementation checks
    `computedAt` on today's and yesterday's rows first and recomputes inline if stale, so
    correctness does not depend on the sweep interval you happen to have configured.
-3. **`StorageProvider` moved into its own package** (`packages/storage`), out of the API,
+3. **`StorageProvider` moved into its own package** (`backend/packages/storage`), out of the API,
    so the worker can write report exports to the exact same place — filesystem or
    S3-compatible bucket — the API serves attachments from, with one implementation
    instead of a second copy that could drift. This caught a real bug in review: a

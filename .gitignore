@@ -18,7 +18,7 @@ test-results/
 playwright-report/
 # Local attachment/report storage (STORAGE_PROVIDER=local), not the storage source module.
 /storage/
-apps/api/storage/
-apps/worker/storage/
+backend/api/storage/
+backend/worker/storage/
 .storage/
 dump.rdb

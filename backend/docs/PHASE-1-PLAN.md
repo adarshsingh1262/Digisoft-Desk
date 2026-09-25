@@ -10,12 +10,12 @@
 
 | # | Deliverable | Notes |
 |---|---|---|
-| 1 | Workspace scaffold | pnpm workspaces, strict tsconfig bases, ESLint/Prettier, Husky + lint-staged, `packages/shared`. |
+| 1 | Workspace scaffold | pnpm workspaces, strict tsconfig bases, ESLint/Prettier, Husky + lint-staged, `backend/packages/shared`. |
 | 2 | Docker dev stack | postgres 16, redis 7, minio, mailhog, api, worker, web; healthchecks + wait-for. |
 | 3 | Env & config | `.env.example`, Zod env schema, fail-fast validation, `ENVIRONMENT.md`. |
-| 4 | Prisma foundation | `schema.prisma` for the Phase-1 tables (DATABASE.md §3), initial migration, seed script. **Changed from plan:** this lives in `packages/db`, not `apps/api`, so the API and worker share one generated client. |
+| 4 | Prisma foundation | `schema.prisma` for the Phase-1 tables (DATABASE.md §3), initial migration, seed script. **Changed from plan:** this lives in `backend/packages/db`, not `backend/api`, so the API and worker share one generated client. |
 | 5 | Tenant isolation layer | `TenantContext` (AsyncLocalStorage), Prisma client extension, `$unscoped()` escape hatch, isolation test suite. |
-| 6 | Common layer | global exception filter + error envelope, response interceptor, pino logging with redaction, Zod validation pipe (shared schemas), Throttler, Helmet, CORS. **Changed from plan:** validation uses the Zod schemas from `packages/shared` rather than class-validator, so the frontend and backend enforce identical rules; throttler counters are in memory, not Redis (see ENVIRONMENT.md). |
+| 6 | Common layer | global exception filter + error envelope, response interceptor, pino logging with redaction, Zod validation pipe (shared schemas), Throttler, Helmet, CORS. **Changed from plan:** validation uses the Zod schemas from `backend/packages/shared` rather than class-validator, so the frontend and backend enforce identical rules; throttler counters are in memory, not Redis (see ENVIRONMENT.md). |
 | 7 | Auth module | register (org + super admin), login, refresh with rotation + reuse detection, logout, me, forgot/reset password, email verification, change password. Argon2id. |
 | 8 | RBAC | Permission catalogue seed, Role/RolePermission/UserRole, global `PermissionsGuard`, `@RequirePermissions`, `@Public`, `@CurrentUser`. |
 | 9 | Organizations module | read/update current org, business hours + holidays CRUD. |

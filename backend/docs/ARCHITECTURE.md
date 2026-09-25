@@ -52,7 +52,15 @@ Zod schemas are shared, through a package with no Nest or React dependency.
 
 ```
 Digisoft-Desk/
-├── apps/
+├── frontend/                     # Next.js App Router (was apps/web)
+│   ├── app/(auth)            # login, register, forgot-password, reset-password
+│   ├── app/(app)             # dashboard, tickets, activities, knowledge base, community, automation, settings
+│   ├── app/(portal)/help/[slug]   # the customer-facing help center, one deployment for every tenant
+│   ├── components/{ui,layout,auth,tickets,customers,accounts,settings,kb,community,help-center,portal}
+│   ├── hooks/ lib/ services/ stores/ types/ e2e/
+│   └── Dockerfile
+│
+├── backend/
 │   ├── api/                      # NestJS API + Socket.IO gateway
 │   │   ├── src/
 │   │   │   ├── main.ts  app.module.ts
@@ -86,29 +94,23 @@ Digisoft-Desk/
 │   │   ├── src/processors/       # send-email, deliver-notification, automation, sla, channel-send, webhook, ai, analytics
 │   │   └── Dockerfile
 │   │
-│   └── web/                      # Next.js App Router
-│       ├── app/(auth)            # login, register, forgot-password, reset-password
-│       ├── app/(app)             # dashboard, tickets, activities, knowledge base, community, automation, settings
-│       ├── app/(portal)/help/[slug]   # the customer-facing help center, one deployment for every tenant
-│       ├── components/{ui,layout,auth,tickets,customers,accounts,settings,kb,community,help-center,portal}
-│       ├── hooks/ lib/ services/ stores/ types/ e2e/
-│       └── Dockerfile
+│   ├── packages/
+│   │   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
+│   │   ├── channels/                 # channel adapters (verify, parse, send) + credential encryption
+│   │   ├── ai/                       # assistant providers, prompts, grounding and the analysis path
+│   │   ├── analytics/                # rollups, reports, CSV export, CSAT survey lifecycle
+│   │   ├── storage/                  # StorageProvider — local filesystem and S3-compatible
+│   │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
+│   │   ├── shared/                   # Zod schemas + types shared by frontend and backend
+│   │   └── tsconfig/                 # strict TypeScript bases
+│   │
+│   └── docs/                     # architecture, database, API, setup, environment, deployment, phase plans
 │
-├── packages/
-│   ├── engine/                   # rule evaluation, actions, business-hours math, SLA, assignment, blueprints
-│   ├── channels/                 # channel adapters (verify, parse, send) + credential encryption
-│   ├── ai/                       # assistant providers, prompts, grounding and the analysis path
-│   ├── analytics/                # rollups, reports, CSV export, CSAT survey lifecycle
-│   ├── storage/                  # StorageProvider — local filesystem and S3-compatible
-│   ├── db/                       # Prisma schema, migrations, seed, tenant extension
-│   ├── shared/                   # Zod schemas + types shared by frontend and backend
-│   └── tsconfig/                 # strict TypeScript bases
-│
-├── docker-compose.yml  .env.example
-└── README.md ARCHITECTURE.md DATABASE.md API.md SETUP.md ENVIRONMENT.md DEPLOYMENT.md
+├── docker-compose.yml  package.json  pnpm-workspace.yaml  .env.example
+└── README.md
 ```
 
-**Why `packages/db` owns Prisma:** the API and the worker both need the generated
+**Why `backend/packages/db` owns Prisma:** the API and the worker both need the generated
 client. Keeping the schema, migrations and generated client in one package means one
 schema, one client and one migration history rather than two that can drift.
 
@@ -167,7 +169,7 @@ Customers (contacts) authenticate into the same org but with role `CUSTOMER`; th
 
 ## 5b. The operations engine
 
-`packages/engine` is pure logic with a small dependency contract (`prisma`, `redis`,
+`backend/packages/engine` is pure logic with a small dependency contract (`prisma`, `redis`,
 `emailQueue`, `log`). Both hosts satisfy it with an **unscoped** Prisma client, so every
 engine query names `organizationId` explicitly — the worker has no request, hence no
 tenant context to lean on.
@@ -219,7 +221,7 @@ resolved, and fires `CUSTOMER_REPLIED` for automation to act on.
 
 ## 5d. The channel pipeline
 
-`packages/channels` holds the adapters and knows nothing about tickets: each one
+`backend/packages/channels` holds the adapters and knows nothing about tickets: each one
 verifies a provider's signature over the raw request bytes, parses its payload into a
 common `InboundMessage`, and — where the provider supports it — sends. That keeps
 protocol quirks (Mailgun's timestamped HMAC, Meta's `hub.challenge`, Twilio's
@@ -254,7 +256,7 @@ hold a value, and the worker decrypts with the same key when it sends.
 
 ## 5e. The assistant
 
-`packages/ai` is the assistant, and like `packages/engine` it is a library the API and
+`backend/packages/ai` is the assistant, and like `backend/packages/engine` it is a library the API and
 the worker both call rather than a service either owns. Three layers:
 
 - **Providers.** `AiProvider` is four methods — `summarise`, `sentiment`, `intent`,
@@ -291,7 +293,7 @@ Four rules hold whichever provider is configured:
 
 ## 5a. File storage
 
-`packages/storage` holds `StorageProvider` and both its implementations, chosen by
+`backend/packages/storage` holds `StorageProvider` and both its implementations, chosen by
 `STORAGE_PROVIDER`; it moved out of the API in Phase 7 so the worker can write report
 exports to the same place the API serves attachments from, with one provider
 implementation instead of two copies that could drift:
@@ -312,7 +314,7 @@ filename. A report export follows the same rule under `exports/{organizationId}/
 
 ## 5f. Reporting and CSAT
 
-`packages/analytics` is a third library alongside the engine and the assistant, with the
+`backend/packages/analytics` is a third library alongside the engine and the assistant, with the
 same shape: it takes an unscoped Prisma client and an explicit `organizationId`, and both
 the API (inside the tenant context) and the worker (without one) call the same functions.
 

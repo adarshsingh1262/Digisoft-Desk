@@ -48,7 +48,7 @@ they may see is decided by the API, not by hiding links.
 - **Server components by default.** Client components only for interactivity (ticket workspace, forms, realtime).
 - **Data**: TanStack Query against the NestJS API through a typed `services/` layer; no `fetch` calls inside components (Rule 6). Query keys are namespaced by resource + filters.
 - **State**: Zustand for UI state only (sidebar, selected ticket, composer draft, command palette). Server state stays in TanStack Query.
-- **Forms**: React Hook Form + Zod resolvers, with the Zod schemas imported from `packages/shared` so FE and BE validate identically.
+- **Forms**: React Hook Form + Zod resolvers, with the Zod schemas imported from `backend/packages/shared` so FE and BE validate identically.
 - **Realtime**: one Socket.IO client in a provider; events invalidate the matching TanStack Query keys rather than mutating caches by hand.
 - **Auth**: `middleware.ts` guards route groups by reading the session cookie; the access token is held in memory and refreshed transparently by an Axios interceptor on 401.
 - **UI**: shadcn/ui + Tailwind, neutral enterprise palette, dense tables, no decorative gradients or animation (§45/§62). Ticket list virtualised with TanStack Virtual (§65).

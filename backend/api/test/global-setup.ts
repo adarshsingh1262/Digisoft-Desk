@@ -6,7 +6,7 @@ require('./jest-setup-env');
 
 /** Applies migrations to the test database before the e2e suites run. */
 export default function globalSetup(): void {
-  const dbPackage = path.resolve(__dirname, '../../../packages/db');
+  const dbPackage = path.resolve(__dirname, '../../packages/db');
   execSync('npx prisma migrate deploy', {
     cwd: dbPackage,
     stdio: 'inherit',
