@@ -1,5 +1,5 @@
 {
-  "name": "digisoft360-helpdesk",
+  "name": "digisoft360-helpdesk-backend",
   "private": true,
   "version": "0.1.0",
   "engines": {
@@ -12,7 +12,6 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "dev:api": "pnpm --filter @digisoft/api dev",
-    "dev:web": "pnpm --filter @digisoft/web dev",
     "dev:worker": "pnpm --filter @digisoft/worker dev",
     "db:migrate": "pnpm --filter @digisoft/db migrate",
     "db:seed": "pnpm --filter @digisoft/db seed",

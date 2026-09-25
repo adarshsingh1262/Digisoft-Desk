@@ -17,9 +17,19 @@ knowledge base — and analytics: a dashboard, per-report screens for tickets, a
 SLA and CSAT, CSV exports rendered in the background, and satisfaction surveys sent on
 resolution and answered through a one-time link with no account behind it.
 
+The repo holds two independent projects, each with its own `package.json`, lockfile,
+Dockerfile and `.env.example`:
+
 ```bash
+# backend — API, worker, Postgres, Redis, MinIO, Mailhog
+cd backend
 cp .env.example .env     # set the two JWT secrets
 docker compose --profile local-db up --build
+
+# frontend — in a second terminal
+cd frontend
+cp .env.example .env.local
+pnpm install && pnpm dev
 ```
 
 Then open http://localhost:3000. Full instructions in [backend/docs/SETUP.md](./backend/docs/SETUP.md).
@@ -37,16 +47,16 @@ Then open http://localhost:3000. Full instructions in [backend/docs/SETUP.md](./
 ## Layout
 
 ```
+frontend          Next.js app (standalone; frontend/shared is its copy of the API's Zod schemas and types)
 backend/api       NestJS API and Socket.IO gateway
 backend/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks, AI, metric rollups, report exports)
-frontend       Next.js frontend
 backend/packages/engine  Rule evaluation, actions, business-hours SLA math, assignment, blueprints
 backend/packages/channels Channel adapters (verify, parse, send) and credential encryption
 backend/packages/ai    Assistant providers (Anthropic, built-in), prompts and the analysis path
 backend/packages/analytics Rollups, reports, CSV export and the CSAT survey lifecycle
 backend/packages/storage StorageProvider — local filesystem and S3-compatible, shared by the API and worker
 backend/packages/db    Prisma schema, migrations, seed, tenant-isolation extension
-backend/packages/shared  Zod schemas and types shared by the frontend and backend
+backend/packages/shared  Zod schemas and types — the source of truth copied into frontend/shared
 ```
 
 ## What is built
@@ -139,6 +149,8 @@ backend/packages/shared  Zod schemas and types shared by the frontend and backen
 
 ## Tests
 
+Backend suites run from `backend/`, the browser suite from `frontend/`.
+
 | Suite | Count | Command |
 |---|---|---|
 | Engine unit (business hours, conditions, blueprints) | 24 | `pnpm --filter @digisoft/engine test` |
@@ -147,7 +159,7 @@ backend/packages/shared  Zod schemas and types shared by the frontend and backen
 | API unit | 73 | `pnpm --filter @digisoft/api test` |
 | API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community, channels, chat, integrations, assistant, analytics/CSAT) | 162 | `pnpm --filter @digisoft/api test:e2e` |
 | Analytics unit (ranges, CSV quoting, survey tokens) | 16 | `pnpm --filter @digisoft/analytics test` |
-| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant, dashboards and reports) | 27 | `pnpm --filter @digisoft/web test:e2e` |
+| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant, dashboards and reports) | 27 | `pnpm test:e2e` (in `frontend/`) |
 
 ## Documentation
 

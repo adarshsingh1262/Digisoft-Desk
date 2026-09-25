@@ -47,12 +47,14 @@ Two separate deployable applications plus a worker process, sharing one PostgreS
 
 ## 2. Repository structure
 
-pnpm workspace. The frontend and backend stay independently deployable; only types and
-Zod schemas are shared, through a package with no Nest or React dependency.
+Two independent projects. `backend/` is a pnpm workspace (api, worker, packages);
+`frontend/` is a standalone Next.js app. The API's Zod schemas and types live in
+`backend/packages/shared` and are copied into `frontend/shared` — change both together.
 
 ```
 Digisoft-Desk/
-├── frontend/                     # Next.js App Router (was apps/web)
+├── frontend/                     # standalone Next.js App Router project (own package.json, lockfile)
+│   ├── shared/                   # copy of backend/packages/shared (API schemas + types)
 │   ├── app/(auth)            # login, register, forgot-password, reset-password
 │   ├── app/(app)             # dashboard, tickets, activities, knowledge base, community, automation, settings
 │   ├── app/(portal)/help/[slug]   # the customer-facing help center, one deployment for every tenant
@@ -60,7 +62,7 @@ Digisoft-Desk/
 │   ├── hooks/ lib/ services/ stores/ types/ e2e/
 │   └── Dockerfile
 │
-├── backend/
+├── backend/                      # standalone pnpm workspace
 │   ├── api/                      # NestJS API + Socket.IO gateway
 │   │   ├── src/
 │   │   │   ├── main.ts  app.module.ts
@@ -101,12 +103,12 @@ Digisoft-Desk/
 │   │   ├── analytics/                # rollups, reports, CSV export, CSAT survey lifecycle
 │   │   ├── storage/                  # StorageProvider — local filesystem and S3-compatible
 │   │   ├── db/                       # Prisma schema, migrations, seed, tenant extension
-│   │   ├── shared/                   # Zod schemas + types shared by frontend and backend
+│   │   ├── shared/                   # Zod schemas + types; source of truth for frontend/shared
 │   │   └── tsconfig/                 # strict TypeScript bases
 │   │
+│   ├── docker-compose.yml  package.json  pnpm-workspace.yaml  .env.example
 │   └── docs/                     # architecture, database, API, setup, environment, deployment, phase plans
 │
-├── docker-compose.yml  package.json  pnpm-workspace.yaml  .env.example
 └── README.md
 ```
 

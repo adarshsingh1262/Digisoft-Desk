@@ -10,16 +10,26 @@
 | Redis | 7 |
 | Docker | optional, for the one-command stack |
 
+The frontend and backend are separate projects. Backend commands run from `backend/`,
+frontend commands from `frontend/`.
+
 ## Option A — Docker Compose
 
 ```bash
+cd backend
 cp .env.example .env
 # set JWT_SECRET and JWT_REFRESH_SECRET: openssl rand -base64 48
 docker compose --profile local-db up --build
 ```
 
-Starts PostgreSQL, Redis, MinIO, Mailhog, the API, the worker and the frontend. The
-API container applies migrations on boot.
+Starts PostgreSQL, Redis, MinIO, Mailhog, the API and the worker. The API container
+applies migrations on boot. Run the frontend separately:
+
+```bash
+cd frontend
+docker build -t digisoft-frontend .   # NEXT_PUBLIC_* are build args
+docker run -p 3000:3000 digisoft-frontend
+```
 
 Using a managed database instead? Edit the `DATABASE_URL` line under the `api` and
 `worker` services in `docker-compose.yml` to your connection string (not `.env` — the
@@ -42,6 +52,7 @@ docker compose up --build
 
 ```bash
 corepack enable
+cd backend
 pnpm install
 cp .env.example .env          # then fill in DATABASE_URL and the two JWT secrets
 
@@ -52,7 +63,11 @@ pnpm db:seed                  # optional demo organization
 
 pnpm dev:api                  # http://localhost:4000
 pnpm dev:worker               # background jobs
-pnpm dev:web                  # http://localhost:3000
+
+cd ../frontend
+pnpm install
+cp .env.example .env.local
+pnpm dev                      # http://localhost:3000
 ```
 
 The seed creates organization `demo` with:
@@ -78,9 +93,9 @@ pnpm --filter @digisoft/api test
 createdb digisoft_helpdesk_test
 pnpm --filter @digisoft/api test:e2e
 
-# Browser tests — needs the API and the frontend running
-pnpm --filter @digisoft/web exec playwright install chromium   # first run only
-pnpm --filter @digisoft/web test:e2e
+# Browser tests (from frontend/) — needs the API and the frontend running
+pnpm exec playwright install chromium   # first run only
+pnpm test:e2e
 ```
 
 The integration suites default to
@@ -92,7 +107,7 @@ On a machine where Chromium is already installed (CI images, sandboxes), point
 Playwright at it instead of downloading one:
 
 ```bash
-PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm --filter @digisoft/web test:e2e
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm test:e2e
 ```
 
 ## Attachments in development
@@ -105,8 +120,8 @@ service from Docker Compose, or a real bucket, when you want to exercise that pa
 ## Everyday commands
 
 ```bash
-pnpm typecheck        # every package
-pnpm build            # every package
+pnpm typecheck        # every backend package (run in frontend/ too)
+pnpm build            # every backend package (run in frontend/ too)
 pnpm db:migrate       # create and apply a migration in development
 pnpm db:deploy        # apply existing migrations (production)
 pnpm --filter @digisoft/db studio   # browse the database

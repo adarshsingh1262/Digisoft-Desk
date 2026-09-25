@@ -1,4 +1,4 @@
-name: digisoft-helpdesk
+name: digisoft-helpdesk-backend
 
 services:
   postgres:
@@ -46,7 +46,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: backend/api/Dockerfile
+      dockerfile: api/Dockerfile
     env_file: [.env]
     environment:
       # Deliberately not ${DATABASE_URL:-...}: .env always sets DATABASE_URL (to
@@ -68,12 +68,12 @@ services:
       # postgres only exists under --profile local-db; required: false lets api
       # start without it when pointed at a managed database instead.
       postgres: { condition: service_healthy, required: false }
-    command: sh -c "cd /app && pnpm --filter @digisoft/db migrate:deploy && cd backend/api && node dist/main.js"
+    command: sh -c "cd /app && pnpm --filter @digisoft/db migrate:deploy && cd api && node dist/main.js"
 
   worker:
     build:
       context: .
-      dockerfile: backend/worker/Dockerfile
+      dockerfile: worker/Dockerfile
     env_file: [.env]
     environment:
       # Deliberately not ${DATABASE_URL:-...}: .env always sets DATABASE_URL (to
@@ -93,16 +93,6 @@ services:
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy, required: false }
-
-  web:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
-      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
-    ports: ['3000:3000']
-    depends_on: [api]
 
 volumes:
   file-storage:
