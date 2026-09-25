@@ -1,0 +1,10 @@
+# Caddy obtains and renews Let's Encrypt certificates for both hosts automatically.
+{$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:4000
+}
