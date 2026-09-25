@@ -1,0 +1,13 @@
+packages:
+  - 'api'
+  - 'worker'
+  - 'packages/*'
+
+# Native/codegen packages that need their install scripts to run.
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - argon2
+  - msgpackr-extract
+  - '@scarf/scarf'

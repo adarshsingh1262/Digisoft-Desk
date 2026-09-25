@@ -17,12 +17,22 @@ knowledge base — and analytics: a dashboard, per-report screens for tickets, a
 SLA and CSAT, CSV exports rendered in the background, and satisfaction surveys sent on
 resolution and answered through a one-time link with no account behind it.
 
+The repo holds two independent projects, each with its own `package.json`, lockfile,
+Dockerfile and `.env.example`:
+
 ```bash
+# backend — API, worker, Postgres, Redis, MinIO, Mailhog
+cd backend
 cp .env.example .env     # set the two JWT secrets
 docker compose --profile local-db up --build
+
+# frontend — in a second terminal
+cd frontend
+cp .env.example .env.local
+pnpm install && pnpm dev
 ```
 
-Then open http://localhost:3000. Full instructions in [SETUP.md](./SETUP.md).
+Then open http://localhost:3000. Full instructions in [backend/docs/SETUP.md](./backend/docs/SETUP.md).
 
 ## Stack
 
@@ -37,16 +47,16 @@ Then open http://localhost:3000. Full instructions in [SETUP.md](./SETUP.md).
 ## Layout
 
 ```
-apps/api       NestJS API and Socket.IO gateway
-apps/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks, AI, metric rollups, report exports)
-apps/web       Next.js frontend
-packages/engine  Rule evaluation, actions, business-hours SLA math, assignment, blueprints
-packages/channels Channel adapters (verify, parse, send) and credential encryption
-packages/ai    Assistant providers (Anthropic, built-in), prompts and the analysis path
-packages/analytics Rollups, reports, CSV export and the CSAT survey lifecycle
-packages/storage StorageProvider — local filesystem and S3-compatible, shared by the API and worker
-packages/db    Prisma schema, migrations, seed, tenant-isolation extension
-packages/shared  Zod schemas and types shared by the frontend and backend
+frontend          Next.js app (standalone; frontend/shared is its copy of the API's Zod schemas and types)
+backend/api       NestJS API and Socket.IO gateway
+backend/worker    BullMQ consumers (email, notifications, automation, SLA sweep, channel sends, webhooks, AI, metric rollups, report exports)
+backend/packages/engine  Rule evaluation, actions, business-hours SLA math, assignment, blueprints
+backend/packages/channels Channel adapters (verify, parse, send) and credential encryption
+backend/packages/ai    Assistant providers (Anthropic, built-in), prompts and the analysis path
+backend/packages/analytics Rollups, reports, CSV export and the CSAT survey lifecycle
+backend/packages/storage StorageProvider — local filesystem and S3-compatible, shared by the API and worker
+backend/packages/db    Prisma schema, migrations, seed, tenant-isolation extension
+backend/packages/shared  Zod schemas and types — the source of truth copied into frontend/shared
 ```
 
 ## What is built
@@ -139,6 +149,8 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 
 ## Tests
 
+Backend suites run from `backend/`, the browser suite from `frontend/`.
+
 | Suite | Count | Command |
 |---|---|---|
 | Engine unit (business hours, conditions, blueprints) | 24 | `pnpm --filter @digisoft/engine test` |
@@ -147,26 +159,26 @@ packages/shared  Zod schemas and types shared by the frontend and backend
 | API unit | 73 | `pnpm --filter @digisoft/api test` |
 | API integration (auth, tenant isolation, RBAC, rate limiting, tickets, ticket access, attachments, activities, operations, knowledge base, portal, community, channels, chat, integrations, assistant, analytics/CSAT) | 162 | `pnpm --filter @digisoft/api test:e2e` |
 | Analytics unit (ranges, CSV quoting, survey tokens) | 16 | `pnpm --filter @digisoft/analytics test` |
-| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant, dashboards and reports) | 27 | `pnpm --filter @digisoft/web test:e2e` |
+| Browser (register, customers, ticket workflow, automation and SLA, help center and community, channels and live chat, assistant, dashboards and reports) | 27 | `pnpm test:e2e` (in `frontend/`) |
 
 ## Documentation
 
 | File | Contents |
 |---|---|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System design, multi-tenancy, auth/RBAC, project layout |
-| [DATABASE.md](./DATABASE.md) | Entity map, schema, indexing plan |
-| [API.md](./API.md) | Endpoint reference, Socket.IO events, error codes |
-| [SETUP.md](./SETUP.md) | Running it locally, with or without Docker |
-| [ENVIRONMENT.md](./ENVIRONMENT.md) | Every environment variable |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production topology and go-live checklist |
-| [docs/FRONTEND.md](./docs/FRONTEND.md) | Route plan and frontend conventions |
-| [docs/PHASE-1-PLAN.md](./docs/PHASE-1-PLAN.md) | Phase 1 scope and status |
-| [docs/PHASE-2-PLAN.md](./docs/PHASE-2-PLAN.md) | Phase 2 scope, decisions and status |
-| [docs/PHASE-3-PLAN.md](./docs/PHASE-3-PLAN.md) | Phase 3 scope, decisions and status |
-| [docs/PHASE-4-PLAN.md](./docs/PHASE-4-PLAN.md) | Phase 4 scope, decisions and status |
-| [docs/PHASE-5-PLAN.md](./docs/PHASE-5-PLAN.md) | Phase 5 scope, decisions and status |
-| [docs/PHASE-6-PLAN.md](./docs/PHASE-6-PLAN.md) | Phase 6 scope, decisions and status |
-| [docs/PHASE-7-PLAN.md](./docs/PHASE-7-PLAN.md) | Phase 7 scope, decisions and status |
+| [backend/docs/ARCHITECTURE.md](./backend/docs/ARCHITECTURE.md) | System design, multi-tenancy, auth/RBAC, project layout |
+| [backend/docs/DATABASE.md](./backend/docs/DATABASE.md) | Entity map, schema, indexing plan |
+| [backend/docs/API.md](./backend/docs/API.md) | Endpoint reference, Socket.IO events, error codes |
+| [backend/docs/SETUP.md](./backend/docs/SETUP.md) | Running it locally, with or without Docker |
+| [backend/docs/ENVIRONMENT.md](./backend/docs/ENVIRONMENT.md) | Every environment variable |
+| [backend/docs/DEPLOYMENT.md](./backend/docs/DEPLOYMENT.md) | Production topology and go-live checklist |
+| [frontend/docs/FRONTEND.md](./frontend/docs/FRONTEND.md) | Route plan and frontend conventions |
+| [backend/docs/PHASE-1-PLAN.md](./backend/docs/PHASE-1-PLAN.md) | Phase 1 scope and status |
+| [backend/docs/PHASE-2-PLAN.md](./backend/docs/PHASE-2-PLAN.md) | Phase 2 scope, decisions and status |
+| [backend/docs/PHASE-3-PLAN.md](./backend/docs/PHASE-3-PLAN.md) | Phase 3 scope, decisions and status |
+| [backend/docs/PHASE-4-PLAN.md](./backend/docs/PHASE-4-PLAN.md) | Phase 4 scope, decisions and status |
+| [backend/docs/PHASE-5-PLAN.md](./backend/docs/PHASE-5-PLAN.md) | Phase 5 scope, decisions and status |
+| [backend/docs/PHASE-6-PLAN.md](./backend/docs/PHASE-6-PLAN.md) | Phase 6 scope, decisions and status |
+| [backend/docs/PHASE-7-PLAN.md](./backend/docs/PHASE-7-PLAN.md) | Phase 7 scope, decisions and status |
 
 ## Roadmap
 
